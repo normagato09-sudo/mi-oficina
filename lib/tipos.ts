@@ -21,6 +21,8 @@ export type Agente = {
   tipo: "redes" | "direccion";
   instrucciones: string;
   creado_en: string;
+  /** Última vez que se abrió su ficha (migración 0003; puede faltar si aún no se ha ejecutado). */
+  visto_en?: string;
 };
 
 export type Publicacion = {

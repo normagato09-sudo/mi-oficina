@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import Header from "@/components/Header";
 import Oficina from "@/components/oficina/Oficina";
 import FichaAgente from "@/components/ficha/FichaAgente";
-import { cargarOficina, type DatosOficina } from "@/lib/datos";
+import { cargarOficina, marcarVisto, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
 
 function resumenEstado(datos: DatosOficina): string {
@@ -42,6 +42,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   }
 
   const agente = datos.agentes.find((a) => a.id === agenteId);
+  if (agente) {
+    // Abrir la ficha cuenta como "visto": su luz verde se apaga.
+    await marcarVisto(agente.id);
+    agente.sinVer = 0;
+  }
   const numAgentes = datos.agentes.length;
 
   return (

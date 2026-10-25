@@ -2,13 +2,23 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import type { Luz } from "@/lib/estado";
 
 const ANCHO = 1200;
+
+/** Un piso de la fachada (un departamento) con una ventana por agente. */
+export type PisoFachada = {
+  id: string;
+  ventanas: { id: string; nombre: string; texto: string; luz: Luz }[];
+};
 
 type Props = {
   nombre: string;
   resumen: string;
   estado: string;
+  /** "⚠ X agentes te necesitan", si alguno está en rojo. */
+  aviso?: string;
+  fachada: PisoFachada[];
   /** Altura del lienzo (px de diseño): depende del número de pisos. */
   alto: number;
   dentroInicial: boolean;
@@ -133,7 +143,7 @@ function Nubes() {
 }
 
 /** Pantallas 1 y 2: la ciudad y, al entrar, el edificio en corte. */
-export default function Escena({ nombre, resumen, estado, alto, dentroInicial, hayFicha, interior }: Props) {
+export default function Escena({ nombre, resumen, estado, aviso, fachada, alto, dentroInicial, hayFicha, interior }: Props) {
   const router = useRouter();
   const [dentro, setDentro] = useState(dentroInicial);
   const [escala, setEscala] = useState<number | null>(null);
@@ -194,17 +204,24 @@ export default function Escena({ nombre, resumen, estado, alto, dentroInicial, h
               type="button"
               className="fachada"
               onClick={entrar}
-              aria-label={`Entrar al edificio ${nombre}`}
+              aria-label={`Entrar al edificio ${nombre}. ${fachada
+                .flatMap((p) => p.ventanas)
+                .map((v) => `${v.nombre}: ${v.texto}`)
+                .join(". ")}`}
             >
               <span className="fachada-letrero" aria-hidden="true">
                 <span className="verde">DEFENSEM</span>
                 <span className="rojo">L&apos;EMPORDANET</span>
               </span>
               <span className="fachada-cuerpo" aria-hidden="true">
-                {[0, 1, 2].map((p) => (
-                  <span key={p} className="fachada-planta">
-                    {[0, 1, 2, 3].map((v) => (
-                      <span key={v} className={`fachada-ventana${(p + v) % 3 === 0 ? " tenue" : ""}`} />
+                {fachada.map((piso) => (
+                  <span key={piso.id} className={`fachada-planta ventanas-${Math.min(piso.ventanas.length, 3)}`}>
+                    {piso.ventanas.map((v) => (
+                      <span key={v.id} className={`fachada-ventana luz-${v.luz}`}>
+                        <span className="globo">
+                          {v.nombre} · {v.texto}
+                        </span>
+                      </span>
                     ))}
                   </span>
                 ))}
@@ -220,6 +237,7 @@ export default function Escena({ nombre, resumen, estado, alto, dentroInicial, h
               <p className="tarjeta-dato">
                 <span className="tarjeta-punto" aria-hidden="true" /> {estado}
               </p>
+              {aviso && <p className="tarjeta-aviso">{aviso}</p>}
               <button type="button" className="btn-primary mt-3 w-full" onClick={entrar}>
                 Entrar al edificio
               </button>

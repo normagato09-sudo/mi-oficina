@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import type { AgenteConEstado, DatosOficina } from "@/lib/datos";
-import { COLOR_TONO, estadoAgente, plural } from "@/lib/estado";
+import { COLOR_LUZ, estadoAgente, plural } from "@/lib/estado";
 import { momentoEspana } from "@/lib/hora";
 import Ambiente from "./Ambiente";
 import Personaje, { type Aspecto } from "./Personaje";
@@ -53,22 +53,24 @@ function estiloAgente(agente: AgenteConEstado): { aspecto: Aspecto; marca: strin
 
 /** Puesto de trabajo: personaje, mesa y objetos. Es un enlace que abre la ficha del agente. */
 function Puesto({ agente, tipo, x, seleccionado }: { agente: AgenteConEstado; tipo: Tipo; x: number; seleccionado: boolean }) {
-  const estado = estadoAgente(agente.estados);
+  const estado = estadoAgente(agente.estados, agente.sinVer);
   const { aspecto, marca } = estiloAgente(agente);
   return (
     <Link
       href={seleccionado ? "/?vista=edificio" : `/?vista=edificio&agente=${agente.id}`}
       scroll={false}
+      prefetch={false}
       aria-current={seleccionado ? "true" : undefined}
       aria-label={`${agente.nombre}: ${estado.texto}. ${seleccionado ? "Cerrar" : "Abrir"} ficha`}
-      className={`puesto puesto-${tipo} marca-${marca}${estado.trabajando ? " trabajando" : ""}`}
+      className={`puesto puesto-${tipo} marca-${marca} luz-${estado.luz}${estado.trabajando ? " trabajando" : ""}`}
       style={{ left: x, top: 176 }}
     >
       <span className="burbuja" aria-hidden="true">
-        <span className="punto" style={{ background: COLOR_TONO[estado.tono] }} />
+        <span className="punto" style={{ background: COLOR_LUZ[estado.luz] }} />
         {agente.nombre} · {estado.texto}
       </span>
       <span className="sombra-puesto" aria-hidden="true" />
+      <span className="halo-estado" aria-hidden="true" />
       <span className="silla" aria-hidden="true" />
       <Personaje pose={estado.trabajando ? "trabajando" : "libre"} aspecto={aspecto} />
       <span className="escritorio" aria-hidden="true" />

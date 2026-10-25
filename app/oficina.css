@@ -125,6 +125,7 @@
 }
 .fachada {
   position: absolute;
+  z-index: 2;
   inset: 0;
   display: block;
   padding: 0;
@@ -187,7 +188,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 22px 18px 0;
+  padding: 22px 18px 108px;
   border-radius: 4px 4px 0 0;
   background:
     repeating-linear-gradient(90deg, transparent 0 38px, rgba(0, 0, 0, 0.05) 38px 40px),
@@ -204,39 +205,110 @@
   transition: opacity 0.6s ease 0.2s;
   pointer-events: none;
 }
+/* Un piso por departamento y una ventana por agente */
 .fachada-planta {
   display: flex;
-  justify-content: space-between;
-  height: 66px;
-  padding-bottom: 8px;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: space-evenly;
+  padding: 8px 4px 10px;
   border-bottom: 4px solid #1f6a2c;
+}
+.fachada-planta.ventanas-2 {
+  justify-content: space-between;
+  padding-inline: 8px;
 }
 .fachada-ventana {
   position: relative;
-  width: 36px;
-  height: 52px;
+  width: 52px;
+  height: 100%;
+  max-height: 74px;
   border: 4px solid #e9f2e4;
   border-radius: 3px;
-  background: linear-gradient(180deg, #ffe7a3, #ffc65a);
-  box-shadow: 0 0 14px rgba(255, 205, 100, 0.65);
-  animation: luz-ventana 7s ease-in-out infinite;
+  /* Sin luz: solo el reflejo del cielo */
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.55) 0 16%, transparent 16% 28%, rgba(255, 255, 255, 0.25) 28% 34%, transparent 34%),
+    linear-gradient(180deg, #8fb4e3, #c9cfe0 60%, #f2c49a);
+  transition: background 0.6s ease, box-shadow 0.6s ease;
+}
+.fachada-planta.ventanas-1 .fachada-ventana {
+  width: 110px;
 }
 .fachada-ventana::after {
   /* travesaño */
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 3px;
-  margin-top: -1.5px;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1.5px;
   background: #e9f2e4;
 }
-.fachada-ventana.tenue {
-  background: linear-gradient(180deg, #ffd27a, #e9a948);
-  box-shadow: 0 0 8px rgba(255, 190, 90, 0.4);
-  animation-delay: -3s;
+.fachada-ventana.luz-amarillo {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.35) 0 14%, transparent 14%),
+    linear-gradient(180deg, #ffe7a3, #f5b841);
+  box-shadow: 0 0 18px 4px rgba(245, 184, 65, 0.7);
 }
+.fachada-ventana.luz-rojo {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.3) 0 14%, transparent 14%),
+    linear-gradient(180deg, #ff6b6b, #da1415);
+  box-shadow: 0 0 18px 4px rgba(218, 20, 21, 0.7);
+  animation: parpadeo-rojo 1.8s ease-in-out infinite;
+}
+.fachada-ventana.luz-verde {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.35) 0 14%, transparent 14%),
+    linear-gradient(180deg, #c4f2d6, #5fd08a);
+  box-shadow: 0 0 18px 4px rgba(95, 208, 138, 0.65);
+}
+
+/* Globo con el agente al pasar el ratón por su ventana */
+.fachada-ventana .globo {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: #fff;
+  color: #1b2136;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+.fachada-ventana .globo::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-luz);
+}
+.fachada-ventana .globo::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  border: 6px solid transparent;
+  border-top-color: #fff;
+  transform: translateX(-50%);
+}
+.fachada-ventana:hover .globo {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 .fachada-puerta {
   position: absolute;
   left: 50%;
@@ -267,6 +339,7 @@
 /* Tarjeta del proyecto (al pasar el ratón o con el foco) */
 .tarjeta-edificio {
   position: absolute;
+  z-index: 1;
   right: calc(100% + 34px);
   top: 110px;
   width: 270px;
@@ -316,6 +389,16 @@
   border-radius: 50%;
   background: #2fbf5b;
   box-shadow: 0 0 0 3px rgba(47, 191, 91, 0.2);
+}
+
+.tarjeta-aviso {
+  margin-top: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(218, 20, 21, 0.16);
+  color: #ff8a8b;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 /* Solar para un proyecto futuro */
@@ -1229,6 +1312,32 @@
   outline-offset: 4px;
 }
 
+/* Color de la luz según el estado del agente (ventana, halo y globo) */
+.luz-apagada { --color-luz: #8a93ad; }
+.luz-amarillo { --color-luz: #f5b841; }
+.luz-rojo { --color-luz: #da1415; }
+.luz-verde { --color-luz: #5fd08a; }
+
+/* Halo de luz detrás del personaje */
+.halo-estado {
+  position: absolute;
+  left: 50%;
+  top: -46px;
+  width: 300px;
+  height: 230px;
+  margin-left: -150px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--color-luz) 90%, transparent) 0 30%, color-mix(in srgb, var(--color-luz) 35%, transparent) 50%, transparent 70%);
+  opacity: 0.9;
+  transition: opacity 0.6s ease;
+}
+.luz-apagada .halo-estado {
+  opacity: 0;
+}
+.luz-rojo .halo-estado {
+  animation: pulso-halo 1.8s ease-in-out infinite;
+}
+
 .sombra-puesto {
   position: absolute;
   left: 50%;
@@ -1737,9 +1846,13 @@
   from { transform: translateX(-260px); }
   to { transform: translateX(1460px); }
 }
-@keyframes luz-ventana {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.12); }
+@keyframes parpadeo-rojo {
+  0%, 100% { filter: brightness(1); box-shadow: 0 0 18px 4px rgba(218, 20, 21, 0.7); }
+  50% { filter: brightness(0.72); box-shadow: 0 0 8px 1px rgba(218, 20, 21, 0.35); }
+}
+@keyframes pulso-halo {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0.4; }
 }
 @keyframes respirar {
   0%, 100% { transform: translateY(0) scaleY(1); }

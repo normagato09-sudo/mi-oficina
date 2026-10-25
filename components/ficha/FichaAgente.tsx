@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { AgenteConEstado } from "@/lib/datos";
-import { COLOR_TONO, estadoAgente } from "@/lib/estado";
+import { COLOR_LUZ, estadoAgente } from "@/lib/estado";
 
 type Props = {
   agente: AgenteConEstado;
@@ -19,7 +19,7 @@ function iniciales(nombre: string): string {
 
 /** Ficha del agente: panel a la derecha en escritorio y a pantalla completa en móvil. */
 export default function FichaAgente({ agente, edificioNombre, children }: Props) {
-  const estado = estadoAgente(agente.estados);
+  const estado = estadoAgente(agente.estados, agente.sinVer);
   return (
     <aside
       aria-labelledby="ficha-titulo"
@@ -53,7 +53,7 @@ export default function FichaAgente({ agente, edificioNombre, children }: Props)
               {edificioNombre} · {agente.departamento.nombre}
             </p>
             <p className="mt-1 flex items-center gap-2 text-sm">
-              <span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: COLOR_TONO[estado.tono] }} />
+              <span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: COLOR_LUZ[estado.luz] }} />
               {estado.texto}
             </p>
           </div>
