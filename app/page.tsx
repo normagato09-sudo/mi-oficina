@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import Header from "@/components/Header";
 import Oficina from "@/components/oficina/Oficina";
 import FichaAgente from "@/components/ficha/FichaAgente";
+import PanelProyecto from "@/components/panel/PanelProyecto";
 import { cargarCiudad, marcarVisto, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
 
@@ -37,7 +38,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     await marcarVisto(agente.id);
     agente.sinVer = 0;
   }
-  const dentro = params.vista === "edificio" || Boolean(agente);
+  // Panel de la estantería del Director: ficha del proyecto y perfiles de sus agentes.
+  const panelAbierto = !agente && params.panel === "proyecto";
+  const dentro = params.vista === "edificio" || Boolean(agente) || panelAbierto;
   const numAgentes = ciudad.reduce((n, d) => n + d.agentes.length, 0);
 
   return (
@@ -53,9 +56,17 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             {plural(ciudad.length, "proyecto", "proyectos")} · {plural(numAgentes, "agente", "agentes")}
           </p>
           <div className="mt-6">
-            <Oficina ciudad={ciudad} actual={proyecto.edificio.id} dentro={dentro} agenteSeleccionado={agente?.id} />
+            <Oficina
+              ciudad={ciudad}
+              actual={proyecto.edificio.id}
+              dentro={dentro}
+              agenteSeleccionado={agente?.id}
+              panelAbierto={panelAbierto}
+            />
           </div>
         </main>
+
+        {panelAbierto && <PanelProyecto datos={proyecto} />}
 
         {agente && (
           <FichaAgente agente={agente} edificio={proyecto.edificio}>

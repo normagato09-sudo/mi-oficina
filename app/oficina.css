@@ -459,16 +459,28 @@
 
 /* ───────────── Pantalla 2 · dentro del edificio ───────────── */
 
+/* Edificios altos: el interior se desliza en vertical; fondo y botón se quedan fijos */
+.capa-interior {
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #2a3550;
+  scrollbar-color: rgba(255, 255, 255, 0.5) transparent;
+}
 .fondo-interior {
-  position: absolute;
-  inset: 0;
+  position: sticky;
+  top: 0;
+  height: 100%;
+  margin-bottom: -900px;
   filter: brightness(0.6) saturate(0.85);
 }
-.volver {
+.fondo-interior .paisaje {
   position: absolute;
-  left: 24px;
+}
+.volver {
+  position: sticky;
   top: 24px;
   z-index: 20;
+  margin: 24px 0 0 24px;
   font-size: 15px;
 }
 
@@ -1563,6 +1575,119 @@
   opacity: calc(var(--halo) * 0.3);
 }
 
+/* Estantería del Director: abre el panel de la ficha y los perfiles */
+.estanteria-enlace {
+  position: absolute;
+  z-index: 7;
+  display: block;
+  height: 136px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+.estanteria-enlace:hover,
+.estanteria-enlace:focus-visible,
+.estanteria-enlace[aria-current="true"] {
+  filter: drop-shadow(0 0 2px #f5b841) drop-shadow(0 0 10px rgba(245, 184, 65, 0.7));
+  transform: translateY(-2px);
+  outline: none;
+}
+.estanteria-pista {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f5b841;
+  color: #1b2136;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+.estanteria-enlace:hover .estanteria-pista,
+.estanteria-enlace:focus-visible .estanteria-pista {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Archivador de candidaturas: carpetas de CV asomando */
+.archivador-candidaturas .carpetas-cv {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: -14px;
+  height: 18px;
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+}
+.archivador-candidaturas .carpetas-cv span {
+  flex: 1;
+  height: 100%;
+  border-radius: 2px 2px 0 0;
+  background: #f5b841;
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.4);
+}
+.archivador-candidaturas .carpetas-cv span:nth-child(2) { height: 80%; background: #5fd08a; }
+.archivador-candidaturas .carpetas-cv span:nth-child(3) { height: 92%; background: #4c9aff; }
+.archivador-candidaturas .carpetas-cv span:nth-child(4) { height: 70%; background: #f472b6; }
+
+/* Tablón con las fotos del equipo */
+.tablon-equipo {
+  position: absolute;
+  height: 112px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 10px;
+  padding: 20px 14px 10px;
+  border: 5px solid #8a5a35;
+  background-color: #c69c6d;
+  background-image: radial-gradient(circle at 20% 30%, rgba(90, 55, 25, 0.35) 1px, transparent 1.5px);
+  background-size: 7px 7px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+.tablon-equipo .titulo-tablon {
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  transform: translateX(-50%);
+  padding: 0 6px;
+  background: #fffdf7;
+  color: #3b2a20;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.foto-equipo {
+  position: relative;
+  border: 3px solid #fff;
+  border-bottom-width: 7px;
+  background:
+    radial-gradient(circle at 50% 42%, var(--piel) 0 7px, transparent 7.5px),
+    radial-gradient(ellipse 60% 40% at 50% 26%, var(--pelo) 98%, transparent),
+    radial-gradient(ellipse 70% 40% at 50% 105%, color-mix(in srgb, var(--fondo) 50%, #5b6378) 98%, transparent),
+    var(--fondo);
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.25);
+}
+.foto-equipo::before {
+  /* chincheta */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -5px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: #da1415;
+}
+
 /* ───────────── Puesto: personaje + escritorio ───────────── */
 
 .puesto {
@@ -1859,7 +1984,22 @@
   border-top-color: #ffffff;
   transform: translateX(-50%);
 }
+/* Avisos largos (p. ej. límite de la IA): en dos líneas para no salirse del piso */
+.burbuja-larga {
+  left: calc(50% - 26px);
+  z-index: 9;
+  width: 300px;
+  transform: none;
+  white-space: normal;
+  border-radius: 14px;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+.burbuja-larga::after {
+  left: 26px;
+}
 .burbuja .punto {
+  flex-shrink: 0;
   width: 10px;
   height: 10px;
   border-radius: 50%;

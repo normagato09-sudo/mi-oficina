@@ -8,10 +8,10 @@ import Ambiente from "./Ambiente";
 import Personaje, { type Aspecto } from "./Personaje";
 import {
   Alfombra, Archivador, Cafetera, Calendario, CuadroNombre, Cuadro, Estanteria, Lampara, LamparaColgante,
-  MicroDoblaje, PanelAcustico, Papelera, Pizarra, Planta, PuertaEntrada, Reloj, Rotulo, Sofa, Ventana,
+  MicroDoblaje, PanelAcustico, Papelera, Pizarra, Planta, PuertaEntrada, Reloj, Rotulo, Sofa, TablonEquipo, Ventana,
 } from "./Decor";
 
-type Tipo = "direccion" | "redes" | "comunicacion" | "administracion" | "generico";
+type Tipo = "direccion" | "redes" | "comunicacion" | "administracion" | "rrhh" | "generico";
 type Estilo = "campo" | "escuela";
 
 export const ALTO_PISO = 270;
@@ -21,10 +21,10 @@ export const ALTO_LOSA = 14;
 /** Alto del lienzo de la escena (px de diseño). */
 export const ALTO_LIENZO = 900;
 
-/** Escala para que el corte (tejado + pisos + recepción + terreno) quepa en el lienzo. */
+/** Escala para que el corte (tejado + pisos + recepción + terreno) quepa en el lienzo; con muchos pisos, se desliza en vertical. */
 function encaje(pisos: number): number {
   const alto = 70 + pisos * (ALTO_PISO + ALTO_LOSA) + ALTO_RECEPCION + 40;
-  return Math.min(1, (ALTO_LIENZO - 50) / alto);
+  return Math.max(0.8, Math.min(1, (ALTO_LIENZO - 50) / alto));
 }
 
 function normalizar(texto: string): string {
@@ -35,6 +35,7 @@ function normalizar(texto: string): string {
 function tipoPiso(nombre: string, agentes: AgenteConEstado[]): Tipo {
   const n = normalizar(nombre);
   if (agentes.some((a) => a.tipo === "direccion") || n.includes("direc")) return "direccion";
+  if (agentes.some((a) => a.tipo === "rrhh") || n === "rrhh" || n.includes("recursos humanos")) return "rrhh";
   if (n.includes("redes")) return "redes";
   if (n.includes("comunicacion")) return "comunicacion";
   if (n.includes("administracion")) return "administracion";
@@ -106,9 +107,9 @@ function Puesto({ agente, edificio, tipo, x, i, seleccionado }: { agente: Agente
       className={`puesto puesto-${tipo} marca-${marca} luz-${estado.luz}${estado.trabajando ? " trabajando" : ""}${estado.inactivo ? " inactivo" : ""}`}
       style={{ left: x, top: 176 }}
     >
-      <span className="burbuja" aria-hidden="true">
+      <span className={`burbuja${estado.texto.length > 28 ? " burbuja-larga" : ""}`} aria-hidden="true">
         <span className="punto" style={{ background: COLOR_LUZ[estado.luz] }} />
-        {estado.inactivo ? estado.texto : `${agente.nombre} · ${estado.texto}`}
+        <span>{estado.inactivo ? estado.texto : `${agente.nombre} · ${estado.texto}`}</span>
       </span>
       <span className="sombra-puesto" aria-hidden="true" />
       <span className="halo-estado" aria-hidden="true" />
@@ -128,7 +129,7 @@ function Puesto({ agente, edificio, tipo, x, i, seleccionado }: { agente: Agente
         </>
       ) : tipo === "comunicacion" ? (
         <span className="micro-mesa" aria-hidden="true" />
-      ) : tipo === "administracion" ? (
+      ) : tipo === "administracion" || tipo === "rrhh" ? (
         <>
           <span className="papel" aria-hidden="true" />
           <span className="libreta" aria-hidden="true" />
@@ -147,8 +148,46 @@ function xPuesto(i: number, total: number): number {
   return 480 + (i - (total - 1) / 2) * 260;
 }
 
-function DecoracionPiso({ tipo, estilo, edificio }: { tipo: Tipo; estilo: Estilo; edificio: Edificio }) {
+/**
+ * La estantería del despacho del Director: abre el panel con la ficha del proyecto
+ * y los perfiles de los agentes del edificio.
+ */
+function EstanteriaDelDirector({ x, y, ancho, edificio, abierto, children }: { x: number; y: number; ancho: number; edificio: Edificio; abierto: boolean; children: ReactNode }) {
+  const base = `/?vista=edificio&proyecto=${edificio.id}`;
+  return (
+    <Link
+      href={abierto ? base : `${base}&panel=proyecto`}
+      scroll={false}
+      prefetch={false}
+      aria-current={abierto ? "true" : undefined}
+      aria-label={`${abierto ? "Cerrar" : "Abrir"} la ficha del proyecto y los perfiles de los agentes`}
+      className="estanteria-enlace"
+      style={{ left: x, top: y, width: ancho }}
+    >
+      {children}
+      <span className="estanteria-pista" aria-hidden="true">
+        Ficha y perfiles
+      </span>
+    </Link>
+  );
+}
+
+function DecoracionPiso({ tipo, estilo, edificio, panelAbierto }: { tipo: Tipo; estilo: Estilo; edificio: Edificio; panelAbierto: boolean }) {
   const letrero = letreroDe(edificio);
+
+  if (tipo === "rrhh") {
+    return (
+      <>
+        <TablonEquipo x={196} y={40} />
+        <Ventana x={650} y={26} ancho={160} alto={130} />
+        <Reloj x={850} y={40} />
+        <Archivador x={30} y={156} candidaturas />
+        <Planta x={884} y={176} tipo="frondosa" />
+        <Planta x={120} y={176} tipo="sanseviera" />
+        <Papelera x={610} y={228} />
+      </>
+    );
+  }
 
   if (estilo === "escuela") {
     switch (tipo) {
@@ -156,7 +195,9 @@ function DecoracionPiso({ tipo, estilo, edificio }: { tipo: Tipo; estilo: Estilo
         return (
           <>
             <Pizarra x={30} y={58} ancho={150} />
-            <Estanteria x={198} y={54} baldas={3} ancho={112} cursos />
+            <EstanteriaDelDirector x={198} y={54} ancho={112} edificio={edificio} abierto={panelAbierto}>
+              <Estanteria x={0} y={0} baldas={3} ancho={112} cursos />
+            </EstanteriaDelDirector>
             <Ventana x={340} y={20} ancho={280} alto={150} />
             <CuadroNombre x={652} y={46} {...letrero} />
             <Reloj x={800} y={40} />
@@ -212,7 +253,9 @@ function DecoracionPiso({ tipo, estilo, edificio }: { tipo: Tipo; estilo: Estilo
       return (
         <>
           <Ventana x={320} y={20} ancho={320} alto={150} />
-          <Estanteria x={34} y={56} baldas={3} ancho={124} trofeos />
+          <EstanteriaDelDirector x={34} y={56} ancho={124} edificio={edificio} abierto={panelAbierto}>
+            <Estanteria x={0} y={0} baldas={3} ancho={124} trofeos />
+          </EstanteriaDelDirector>
           <CuadroNombre x={186} y={74} {...letrero} />
           <Reloj x={676} y={34} />
           <Cuadro x={820} y={34} tipo="molino" ancho={58} alto={46} />
@@ -274,7 +317,7 @@ function Piso({ etiqueta, numero, alto, tipo, children }: { etiqueta: string; nu
 }
 
 /** El edificio en corte: un piso por departamento y la recepción abajo. Sirve para cualquier proyecto. */
-export default function Interior({ datos, agenteSeleccionado }: { datos: DatosOficina; agenteSeleccionado?: string }) {
+export default function Interior({ datos, agenteSeleccionado, panelAbierto = false }: { datos: DatosOficina; agenteSeleccionado?: string; panelAbierto?: boolean }) {
   const { edificio } = datos;
   const total = datos.departamentos.length;
   const estilo = estiloDe(edificio);
@@ -302,7 +345,7 @@ export default function Interior({ datos, agenteSeleccionado }: { datos: DatosOf
               alto={ALTO_PISO}
               tipo={tipo}
             >
-              <DecoracionPiso tipo={tipo} estilo={estilo} edificio={edificio} />
+              <DecoracionPiso tipo={tipo} estilo={estilo} edificio={edificio} panelAbierto={panelAbierto} />
               {dep.agentes.map((agente, j) => (
                 <Puesto
                   key={agente.id}

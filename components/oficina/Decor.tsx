@@ -123,13 +123,46 @@ export function Calendario({ x, y }: Pos) {
   );
 }
 
-/** Archivador metálico de tres cajones. */
-export function Archivador({ x, y }: Pos) {
+/** Archivador metálico de tres cajones. Con "candidaturas", el de arriba abierto y lleno de carpetas de CV. */
+export function Archivador({ x, y, candidaturas = false }: Pos & { candidaturas?: boolean }) {
   return (
-    <Pieza x={x} y={y} className="archivador">
+    <Pieza x={x} y={y} className={`archivador${candidaturas ? " archivador-candidaturas" : ""}`}>
+      {candidaturas && (
+        <span className="carpetas-cv">
+          <span />
+          <span />
+          <span />
+          <span />
+        </span>
+      )}
       <span className="cajon" />
       <span className="cajon" />
       <span className="cajon" />
+    </Pieza>
+  );
+}
+
+const CARAS = [
+  { piel: "#f1c7a1", pelo: "#3b2a20", fondo: "#bfe3c4" },
+  { piel: "#a8744f", pelo: "#1c1714", fondo: "#fde68a" },
+  { piel: "#e8b894", pelo: "#a0522d", fondo: "#c9dcf5" },
+  { piel: "#d9a27a", pelo: "#8a8a8a", fondo: "#f9c6cf" },
+  { piel: "#f1c7a1", pelo: "#c9a227", fondo: "#e2d4f5" },
+  { piel: "#8d5a3b", pelo: "#1c1714", fondo: "#bfe3c4" },
+];
+
+/** Tablón de corcho con las fotos del equipo. */
+export function TablonEquipo({ x, y, ancho = 160 }: Pos & { ancho?: number }) {
+  return (
+    <Pieza x={x} y={y} className="tablon-equipo" style={{ width: ancho }}>
+      {CARAS.map((c, i) => (
+        <span
+          key={i}
+          className="foto-equipo"
+          style={{ "--piel": c.piel, "--pelo": c.pelo, "--fondo": c.fondo, transform: `rotate(${[-6, 4, -2, 5, -4, 3][i]}deg)` } as CSSProperties}
+        />
+      ))}
+      <span className="titulo-tablon">Nuestro equipo</span>
     </Pieza>
   );
 }

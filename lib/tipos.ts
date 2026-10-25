@@ -30,13 +30,15 @@ export type Agente = {
   id: string;
   departamento_id: string;
   nombre: string;
-  tipo: "redes" | "direccion" | "comunicacion" | "administracion";
+  tipo: "redes" | "direccion" | "comunicacion" | "administracion" | "rrhh";
   instrucciones: string;
   creado_en: string;
   /** Última vez que se abrió su ficha (migración 0003; puede faltar si aún no se ha ejecutado). */
   visto_en?: string;
   /** false = aún no trabaja: se ve en gris y "Próximamente" (migración 0004). */
   activo?: boolean;
+  /** Aviso de la IA (p. ej. límite gratuito alcanzado): pone al agente en rojo (migración 0005). */
+  aviso_ia?: string | null;
 };
 
 export type Publicacion = {

@@ -1,4 +1,5 @@
 import "server-only";
+import { LimiteIAError } from "./ia";
 import { supabase } from "./supabase";
 import type { Agente, Departamento, Edificio, EstadoPublicacion, Publicacion } from "./tipos";
 
@@ -106,6 +107,50 @@ export async function contextoAgente(agenteId: string): Promise<{
     agente,
     proyecto: { nombre: edificio.nombre, idioma: edificio.idioma ?? "es", ficha: edificio.ficha ?? "" },
   };
+}
+
+const IDIOMAS: Record<string, string> = { es: "español", ca: "catalán", en: "inglés" };
+
+/** Instrucciones de sistema de un agente: su perfil, la ficha de su proyecto y el idioma. */
+export function sistemaDeAgente({ agente, proyecto }: Awaited<ReturnType<typeof contextoAgente>>): string {
+  const idioma = IDIOMAS[proyecto.idioma] ?? proyecto.idioma;
+  return [
+    agente.instrucciones.trim(),
+    `Trabajas para el proyecto "${proyecto.nombre}". Escribe siempre en ${idioma}.`,
+    proyecto.ficha.trim() && `Ficha del proyecto (síguela siempre):\n${proyecto.ficha.trim()}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/**
+ * Ejecuta un trabajo de IA en nombre de un agente.
+ * Si la IA está en su límite de uso, el agente se pone en rojo con el aviso; si va bien, el aviso se quita.
+ */
+export async function trabajarComoAgente<T>(agenteId: string, trabajo: () => Promise<T>): Promise<T> {
+  try {
+    const resultado = await trabajo();
+    await supabase().from("agentes").update({ aviso_ia: null }).eq("id", agenteId).not("aviso_ia", "is", null);
+    return resultado;
+  } catch (e) {
+    if (e instanceof LimiteIAError) {
+      const { error } = await supabase().from("agentes").update({ aviso_ia: e.message }).eq("id", agenteId);
+      if (error) console.error(`No se pudo guardar el aviso de la IA: ${error.message}`);
+    }
+    throw e;
+  }
+}
+
+/** Guarda la ficha de un proyecto. */
+export async function guardarFicha(edificioId: string, ficha: string): Promise<void> {
+  const { error } = await supabase().from("edificios").update({ ficha }).eq("id", edificioId);
+  if (error) throw new Error(`No se pudo guardar la ficha: ${error.message}`);
+}
+
+/** Guarda el perfil (instrucciones) de un agente. */
+export async function guardarPerfil(agenteId: string, instrucciones: string): Promise<void> {
+  const { error } = await supabase().from("agentes").update({ instrucciones }).eq("id", agenteId);
+  if (error) throw new Error(`No se pudo guardar el perfil: ${error.message}`);
 }
 
 /** Guarda que se acaba de abrir la ficha del agente (apaga su luz verde). */

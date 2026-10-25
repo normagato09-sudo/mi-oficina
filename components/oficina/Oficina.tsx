@@ -9,6 +9,8 @@ type Props = {
   actual: string;
   dentro: boolean;
   agenteSeleccionado?: string;
+  /** El panel de la estantería está abierto (cuenta como ficha abierta al volver a la ciudad). */
+  panelAbierto?: boolean;
 };
 
 /** Resumen corto del estado de un proyecto, para su tarjeta. */
@@ -27,7 +29,7 @@ export function resumenEstado(datos: DatosOficina): string {
 }
 
 /** La ciudad con un edificio por proyecto y, al entrar, el interior del elegido. */
-export default function Oficina({ ciudad, actual, dentro, agenteSeleccionado }: Props) {
+export default function Oficina({ ciudad, actual, dentro, agenteSeleccionado, panelAbierto = false }: Props) {
   const proyectos: ProyectoCiudad[] = ciudad.map((datos) => {
     // Fachada: un piso por departamento (de arriba abajo) y una ventana por agente.
     const fachada = datos.departamentos.map((dep) => ({
@@ -50,7 +52,10 @@ export default function Oficina({ ciudad, actual, dentro, agenteSeleccionado }: 
   });
 
   const interiores = Object.fromEntries(
-    ciudad.map((datos) => [datos.edificio.id, <Interior key={datos.edificio.id} datos={datos} agenteSeleccionado={agenteSeleccionado} />]),
+    ciudad.map((datos) => [
+      datos.edificio.id,
+      <Interior key={datos.edificio.id} datos={datos} agenteSeleccionado={agenteSeleccionado} panelAbierto={panelAbierto} />,
+    ]),
   );
 
   return (
@@ -60,7 +65,7 @@ export default function Oficina({ ciudad, actual, dentro, agenteSeleccionado }: 
       alto={ALTO_LIENZO}
       dentroInicial={dentro}
       actualInicial={actual}
-      hayFicha={Boolean(agenteSeleccionado)}
+      hayFicha={Boolean(agenteSeleccionado) || panelAbierto}
     />
   );
 }

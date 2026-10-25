@@ -18,11 +18,13 @@ export type EstadoAgente = {
  * Prioridad: rojo (te necesita) > amarillo (trabajando) > verde (terminado sin ver) > apagada.
  */
 export function estadoAgente(
-  agente: { estados: Record<EstadoPublicacion, number>; sinVer: number; activo?: boolean },
+  agente: { estados: Record<EstadoPublicacion, number>; sinVer: number; activo?: boolean; aviso_ia?: string | null },
 ): EstadoAgente {
   const { estados, sinVer } = agente;
   if (agente.activo === false) return { luz: "apagada", texto: "Próximamente", trabajando: false, inactivo: true };
   const base = { trabajando: estados.preparando + estados.publicando > 0, inactivo: false };
+  // La IA no ha podido trabajar (p. ej. límite gratuito alcanzado): también te necesita.
+  if (agente.aviso_ia) return { ...base, luz: "rojo", texto: agente.aviso_ia };
   if (estados.lista > 0) return { ...base, luz: "rojo", texto: "Te necesita" };
   if (estados.error > 0) return { ...base, luz: "rojo", texto: "Error" };
   if (estados.preparando > 0) return { ...base, luz: "amarillo", texto: "Preparando…" };
