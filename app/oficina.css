@@ -1,0 +1,442 @@
+/* ───────────── La oficina (vista desde arriba) ───────────── */
+
+.planta {
+  background-color: #141a2b;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.sala {
+  position: relative;
+  width: 560px;
+  height: 440px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #d8cfc0;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45), 0 0 0 3px #0b0f1a;
+}
+
+.sala-pared {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 78px;
+  background: linear-gradient(180deg, #f2ece1, #e3dacb);
+  border-bottom: 6px solid #cbbfab;
+}
+
+.sala-suelo {
+  position: absolute;
+  inset: 84px 16px 16px 16px;
+  border-radius: 4px;
+  background-color: #c9a97e;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 63px, rgba(90, 60, 30, 0.18) 63px 64px),
+    repeating-linear-gradient(90deg, #c9a97e 0 30px, #bf9f74 30px 60px);
+  box-shadow: inset 0 6px 10px rgba(80, 55, 25, 0.25);
+}
+
+.sala-placa {
+  position: absolute;
+  left: 28px;
+  top: 22px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: #1e2333;
+  color: #f2ece1;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 0 #0b0f1a;
+}
+
+.sala-ventana {
+  position: absolute;
+  right: 36px;
+  top: 12px;
+  width: 132px;
+  height: 52px;
+  border: 5px solid #fbf8f2;
+  border-radius: 4px;
+  background: linear-gradient(160deg, #a9dbfa 0%, #6fb3e6 60%, #5aa0d6 100%);
+  box-shadow: 0 2px 0 #cbbfab, inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.sala-ventana::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 50%;
+  width: 4px;
+  transform: translateX(-50%);
+  background: #fbf8f2;
+}
+.sala-ventana::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 6px;
+  width: 22px;
+  height: 30px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6), transparent);
+  transform: skewX(-20deg);
+}
+
+.sala-alfombra {
+  position: absolute;
+  left: 50%;
+  top: 64%;
+  width: 330px;
+  height: 170px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #4a7a63;
+  box-shadow: inset 0 0 0 9px #3b6450, inset 0 0 0 12px #e9d8ae, inset 0 0 0 20px #4a7a63;
+}
+
+/* Planta en maceta */
+.planta-maceta {
+  position: absolute;
+  left: 30px;
+  bottom: 28px;
+  width: 64px;
+  height: 70px;
+}
+.planta-maceta .hoja {
+  position: absolute;
+  bottom: 22px;
+  left: 19px;
+  width: 26px;
+  height: 42px;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: #3e9b4f;
+  box-shadow: inset -4px -4px 0 rgba(0, 0, 0, 0.12);
+  transform-origin: 50% 100%;
+}
+.planta-maceta .hoja:nth-child(1) { transform: rotate(-40deg); background: #348a45; }
+.planta-maceta .hoja:nth-child(2) { transform: rotate(-12deg); }
+.planta-maceta .hoja:nth-child(3) { transform: rotate(16deg); background: #47a858; }
+.planta-maceta .hoja:nth-child(4) { transform: rotate(44deg); background: #348a45; }
+.planta-maceta .maceta {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 40px;
+  height: 30px;
+  transform: translateX(-50%);
+  border-radius: 4px 4px 10px 10px;
+  background: linear-gradient(180deg, #c8754a, #a85d36);
+  box-shadow: inset 0 4px 0 #d98a5e;
+}
+
+/* Puesto: personaje + escritorio (es un enlace: abre la ficha) */
+.puesto {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: 220px;
+  height: 190px;
+  transform: translate(-50%, -50%);
+  border-radius: 16px;
+  display: block;
+  cursor: pointer;
+}
+.puesto:hover .personaje,
+.puesto:focus-visible .personaje {
+  filter: brightness(1.06);
+}
+.puesto[aria-current="true"] {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 6px;
+}
+
+.silla {
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  width: 92px;
+  height: 92px;
+  transform: translateX(-50%);
+  border-radius: 22px 22px 12px 12px;
+  background: #2a2f3f;
+  box-shadow: inset 0 -8px 0 #1f2331, 0 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.personaje {
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 90px;
+  height: 120px;
+  margin-left: -45px;
+  transform-origin: 50% 100%;
+}
+.personaje .cuerpo {
+  position: absolute;
+  left: 50%;
+  top: 56px;
+  width: 74px;
+  height: 64px;
+  transform: translateX(-50%);
+  border-radius: 34px 34px 12px 12px;
+  background: #da1415;
+  box-shadow: inset 0 -6px 0 #b10f10;
+}
+.personaje .cuerpo::before {
+  /* cuello de la camiseta */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 22px;
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 0 0 12px 12px;
+  background: #e8b48f;
+}
+.personaje .brazo {
+  position: absolute;
+  top: 70px;
+  width: 18px;
+  height: 46px;
+  border-radius: 10px;
+  background: #c51213;
+}
+.personaje .brazo.izq { left: 4px; transform: rotate(14deg); }
+.personaje .brazo.der { right: 4px; transform: rotate(-14deg); }
+.personaje .cabeza {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 54px;
+  height: 54px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #f1c7a1;
+  box-shadow: inset -5px -4px 0 rgba(160, 90, 50, 0.18);
+}
+.personaje .pelo {
+  position: absolute;
+  left: -3px;
+  top: -4px;
+  width: 60px;
+  height: 28px;
+  border-radius: 30px 30px 8px 18px;
+  background: #3b2a20;
+}
+.personaje .pelo::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  top: 16px;
+  width: 14px;
+  height: 14px;
+  border-radius: 0 0 10px 10px;
+  background: #3b2a20;
+}
+.personaje .ojo {
+  position: absolute;
+  top: 30px;
+  width: 6px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1c1714;
+  animation: parpadeo 4.5s infinite;
+}
+.personaje .ojo.izq { left: 15px; }
+.personaje .ojo.der { right: 15px; }
+.personaje .moflete {
+  position: absolute;
+  top: 39px;
+  width: 8px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(230, 110, 100, 0.45);
+}
+.personaje .moflete.izq { left: 8px; }
+.personaje .moflete.der { right: 8px; }
+
+.escritorio {
+  position: absolute;
+  left: 50%;
+  top: 108px;
+  width: 200px;
+  height: 64px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #a87449 0 14px, #8a5a35 14px);
+  box-shadow: 0 6px 0 #6b4427, 0 12px 16px rgba(60, 35, 15, 0.35);
+}
+.escritorio::after {
+  /* vetas de la madera */
+  content: "";
+  position: absolute;
+  inset: 22px 16px 14px;
+  background: repeating-linear-gradient(0deg, transparent 0 8px, rgba(0, 0, 0, 0.06) 8px 9px);
+  border-radius: 4px;
+}
+
+.portatil {
+  position: absolute;
+  left: 50%;
+  top: 94px;
+  width: 64px;
+  height: 38px;
+  transform: translateX(-50%);
+  border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(180deg, #cfd5e1, #aeb6c6);
+  box-shadow: 0 3px 0 #8f97a8;
+  z-index: 2;
+}
+.portatil::before {
+  /* logo de la tapa */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #e9ecf5;
+}
+.portatil .brillo {
+  position: absolute;
+  inset: -6px -8px auto;
+  height: 8px;
+  border-radius: 8px;
+  background: rgba(150, 210, 255, 0.65);
+  filter: blur(3px);
+  opacity: 0.45;
+}
+
+.papel {
+  position: absolute;
+  left: 24px;
+  top: 120px;
+  width: 34px;
+  height: 42px;
+  border-radius: 2px;
+  background: #fbfaf6;
+  transform: rotate(-12deg);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+  z-index: 2;
+}
+.papel::before {
+  content: "";
+  position: absolute;
+  inset: 8px 6px auto;
+  height: 18px;
+  background: repeating-linear-gradient(180deg, #c5ccd9 0 2px, transparent 2px 6px);
+}
+
+.taza {
+  position: absolute;
+  right: 30px;
+  top: 124px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f5f2ea;
+  box-shadow: inset 0 0 0 4px #f5f2ea, inset 0 0 0 11px #6b3f22;
+  z-index: 2;
+}
+.taza::after {
+  content: "";
+  position: absolute;
+  right: -7px;
+  top: 6px;
+  width: 9px;
+  height: 10px;
+  border: 3px solid #f5f2ea;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+
+/* Burbuja de estado */
+.burbuja {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1b2136;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  z-index: 3;
+}
+.burbuja::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  border: 7px solid transparent;
+  border-top-color: #ffffff;
+  transform: translateX(-50%);
+}
+.burbuja .punto {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Trabajando: se balancea como si tecleara y el portátil parpadea */
+.puesto.trabajando .personaje { animation: teclear 0.5s ease-in-out infinite alternate; }
+.puesto.trabajando .brazo.izq { animation: brazo-izq 0.25s ease-in-out infinite alternate; }
+.puesto.trabajando .brazo.der { animation: brazo-der 0.25s ease-in-out infinite alternate-reverse; }
+.puesto.trabajando .portatil .brillo { animation: pantalla 0.9s steps(2, jump-none) infinite; }
+.puesto.trabajando .burbuja .punto { animation: latido 1s ease-in-out infinite; }
+
+@keyframes teclear {
+  from { transform: rotate(-2.5deg); }
+  to { transform: rotate(2.5deg) translateY(1px); }
+}
+@keyframes brazo-izq {
+  from { transform: rotate(14deg) translateY(0); }
+  to { transform: rotate(10deg) translateY(-3px); }
+}
+@keyframes brazo-der {
+  from { transform: rotate(-14deg) translateY(0); }
+  to { transform: rotate(-10deg) translateY(-3px); }
+}
+@keyframes pantalla {
+  from { opacity: 0.2; }
+  to { opacity: 1; }
+}
+@keyframes latido {
+  50% { transform: scale(1.35); }
+}
+@keyframes parpadeo {
+  0%, 94%, 100% { transform: scaleY(1); }
+  97% { transform: scaleY(0.1); }
+}
+
+/* Hueco para futuros departamentos */
+.sala-vacia {
+  width: 340px;
+  height: 440px;
+  flex-shrink: 0;
+  border: 2px dashed #2e3756;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .puesto.trabajando .personaje,
+  .puesto.trabajando .brazo,
+  .puesto.trabajando .burbuja .punto,
+  .personaje .ojo {
+    animation: none !important;
+  }
+  .puesto.trabajando .portatil .brillo {
+    animation: none;
+    opacity: 1;
+  }
+}

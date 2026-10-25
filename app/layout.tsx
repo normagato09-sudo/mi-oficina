@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Inter } from "next/font/google";
 import "./globals.css";
+import "./oficina.css";
 
 const archivo = Archivo({ variable: "--font-archivo", subsets: ["latin"], weight: ["800"] });
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
