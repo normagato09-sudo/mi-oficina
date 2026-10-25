@@ -18,7 +18,7 @@ export type Agente = {
   id: string;
   departamento_id: string;
   nombre: string;
-  tipo: "redes";
+  tipo: "redes" | "direccion";
   instrucciones: string;
   creado_en: string;
 };

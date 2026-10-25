@@ -57,7 +57,12 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             {plural(numAgentes, "agente", "agentes")} · {resumenEstado(datos)}
           </p>
           <div className="mt-6">
-            <Oficina datos={datos} agenteSeleccionado={agente?.id} />
+            <Oficina
+              datos={datos}
+              estado={resumenEstado(datos)}
+              dentro={params.vista === "edificio" || Boolean(agente)}
+              agenteSeleccionado={agente?.id}
+            />
           </div>
         </main>
 

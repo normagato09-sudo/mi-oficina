@@ -28,7 +28,7 @@ export default function FichaAgente({ agente, edificioNombre, children }: Props)
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-ink/95 px-4 py-2 backdrop-blur lg:bg-panel/95">
         <span className="text-sm text-muted">Ficha del agente</span>
         <Link
-          href="/"
+          href="/?vista=edificio"
           scroll={false}
           className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-2xl leading-none text-muted hover:text-text"
           aria-label="Cerrar ficha"
