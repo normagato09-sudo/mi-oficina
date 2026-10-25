@@ -44,9 +44,10 @@ const LIBROS = [
   ["#34495e", 30], ["#d35d6e", 26], ["#1f8a8a", 33], ["#c9a227", 29], ["#298d3b", 31], ["#da1415", 27],
 ] as const;
 
-export function Estanteria({ x, y, baldas = 2, ancho = 104, trofeos = false }: Pos & { baldas?: number; ancho?: number; trofeos?: boolean }) {
+/** Estantería de pared. Con "cursos", libros más gruesos con etiqueta, como manuales de curso. */
+export function Estanteria({ x, y, baldas = 2, ancho = 104, trofeos = false, cursos = false }: Pos & { baldas?: number; ancho?: number; trofeos?: boolean; cursos?: boolean }) {
   return (
-    <Pieza x={x} y={y} className="estanteria" style={{ width: ancho }}>
+    <Pieza x={x} y={y} className={`estanteria${cursos ? " estanteria-cursos" : ""}`} style={{ width: ancho }}>
       {Array.from({ length: baldas }, (_, b) => (
         <span key={b} className="balda">
           {trofeos && b === 0 ? (
@@ -75,13 +76,85 @@ export function Cuadro({ x, y, tipo = "paisaje", ancho = 64, alto = 48 }: Pos & 
   return <Pieza x={x} y={y} className={`cuadro cuadro-${tipo}`} style={{ width: ancho, height: alto }} />;
 }
 
-/** Cuadro enmarcado con el nombre DEFENSEM. */
-export function CuadroDefensem({ x, y }: Pos) {
+/** Cuadro enmarcado con el nombre del proyecto, en sus colores. */
+export function CuadroNombre({ x, y, principal, secundario, color, colorSecundario }: Pos & { principal: string; secundario: string | null; color: string; colorSecundario: string }) {
   return (
-    <Pieza x={x} y={y} className="cuadro-defensem">
-      <span className="marca">DEFENSEM</span>
-      <span className="sub">L&apos;EMPORDANET</span>
-      <span className="franja" />
+    <Pieza x={x} y={y} className="cuadro-nombre">
+      <span className="marca" style={{ color }}>
+        {principal}
+      </span>
+      {secundario && (
+        <span className="sub" style={{ color: colorSecundario }}>
+          {secundario}
+        </span>
+      )}
+      <span className="franja" style={{ background: `linear-gradient(90deg, ${color} 0 50%, ${colorSecundario} 50%)` }} />
+    </Pieza>
+  );
+}
+
+/** Pizarra verde de clase, con tiza. */
+export function Pizarra({ x, y, ancho = 150 }: Pos & { ancho?: number }) {
+  return (
+    <Pieza x={x} y={y} className="pizarra-clase" style={{ width: ancho }}>
+      <svg viewBox="0 0 140 80" preserveAspectRatio="none">
+        <g fill="none" stroke="#eef3ea" strokeWidth="1.6" strokeLinecap="round" opacity="0.9">
+          <path d="M10 14 h44 M10 24 h30" />
+          <path d="M10 40 l8 8 l14 -18" />
+          <path d="M44 44 h40 M44 54 h28" />
+          <circle cx="112" cy="26" r="14" />
+          <path d="M104 26 h16 M112 18 v16" />
+          <path d="M92 62 q12 -10 30 0" />
+        </g>
+      </svg>
+      <span className="repisa" />
+    </Pieza>
+  );
+}
+
+/** Calendario de pared con días marcados. */
+export function Calendario({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="calendario">
+      <span className="anillas" />
+      <span className="mes" />
+      <span className="dias" />
+    </Pieza>
+  );
+}
+
+/** Archivador metálico de tres cajones. */
+export function Archivador({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="archivador">
+      <span className="cajon" />
+      <span className="cajon" />
+      <span className="cajon" />
+    </Pieza>
+  );
+}
+
+/** Micrófono de doblaje: pie alto, araña y filtro antipop. */
+export function MicroDoblaje({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="micro-doblaje">
+      <span className="antipop" />
+      <span className="capsula" />
+      <span className="pie-micro" />
+    </Pieza>
+  );
+}
+
+/** Panel de espuma acústica en la pared. */
+export function PanelAcustico({ x, y, ancho = 360 }: Pos & { ancho?: number }) {
+  return <Pieza x={x} y={y} className="panel-acustico" style={{ width: ancho }} />;
+}
+
+/** Cartel luminoso (se enciende cuando alguien de la sala trabaja). */
+export function Rotulo({ x, y, texto }: Pos & { texto: string }) {
+  return (
+    <Pieza x={x} y={y} className="rotulo">
+      {texto}
     </Pieza>
   );
 }

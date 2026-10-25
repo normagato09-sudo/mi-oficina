@@ -9,20 +9,26 @@ export type EstadoAgente = {
   luz: Luz;
   texto: string;
   trabajando: boolean;
+  /** Agente que aún no trabaja (activo = false): en gris y "Próximamente". */
+  inactivo: boolean;
 };
 
 /**
  * Estado visible del agente a partir del recuento de sus publicaciones.
  * Prioridad: rojo (te necesita) > amarillo (trabajando) > verde (terminado sin ver) > apagada.
  */
-export function estadoAgente(estados: Record<EstadoPublicacion, number>, sinVer = 0): EstadoAgente {
-  const trabajando = estados.preparando + estados.publicando > 0;
-  if (estados.lista > 0) return { luz: "rojo", texto: "Te necesita", trabajando };
-  if (estados.error > 0) return { luz: "rojo", texto: "Error", trabajando };
-  if (estados.preparando > 0) return { luz: "amarillo", texto: "Preparando…", trabajando };
-  if (estados.publicando > 0) return { luz: "amarillo", texto: "Publicando…", trabajando };
-  if (sinVer > 0) return { luz: "verde", texto: "¡Terminado!", trabajando };
-  return { luz: "apagada", texto: "Libre", trabajando };
+export function estadoAgente(
+  agente: { estados: Record<EstadoPublicacion, number>; sinVer: number; activo?: boolean },
+): EstadoAgente {
+  const { estados, sinVer } = agente;
+  if (agente.activo === false) return { luz: "apagada", texto: "Próximamente", trabajando: false, inactivo: true };
+  const base = { trabajando: estados.preparando + estados.publicando > 0, inactivo: false };
+  if (estados.lista > 0) return { ...base, luz: "rojo", texto: "Te necesita" };
+  if (estados.error > 0) return { ...base, luz: "rojo", texto: "Error" };
+  if (estados.preparando > 0) return { ...base, luz: "amarillo", texto: "Preparando…" };
+  if (estados.publicando > 0) return { ...base, luz: "amarillo", texto: "Publicando…" };
+  if (sinVer > 0) return { ...base, luz: "verde", texto: "¡Terminado!" };
+  return { ...base, luz: "apagada", texto: "Libre" };
 }
 
 export const COLOR_LUZ: Record<Luz, string> = {

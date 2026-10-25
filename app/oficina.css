@@ -2,6 +2,16 @@
 
 /* ───────────── Escena: lienzo de 1200 px escalado al ancho disponible ───────────── */
 
+/* Colores del edificio: todo sale de --edificio (el color del proyecto) */
+.edificio-ciudad,
+.corte {
+  --edificio: #298d3b;
+  --edificio-claro: color-mix(in srgb, var(--edificio) 82%, white);
+  --edificio-medio: color-mix(in srgb, var(--edificio) 85%, black);
+  --edificio-oscuro: color-mix(in srgb, var(--edificio) 70%, black);
+  --edificio-sombra: color-mix(in srgb, var(--edificio) 55%, black);
+}
+
 .escena {
   position: relative;
   width: 100%;
@@ -27,7 +37,8 @@
 .capa-interior {
   position: absolute;
   inset: 0;
-  transform-origin: 600px 520px;
+  /* El zoom sale del edificio elegido (--origen-x lo pone la escena) */
+  transform-origin: var(--origen-x, 600px) calc(100% - 380px);
   transition-property: transform, opacity;
   transition-timing-function: cubic-bezier(0.65, 0, 0.25, 1), ease;
 }
@@ -59,11 +70,32 @@
   transition-duration: 0.9s, 0.5s;
   transition-delay: 0.35s, 0.55s;
 }
-.escena[data-dentro="true"] .fachada-cuerpo::after {
+.escena[data-dentro="true"] .elegido .fachada-cuerpo::after {
   opacity: 1;
 }
 
 /* ───────────── Pantalla 1 · la ciudad ───────────── */
+
+/* La ciudad se desliza en horizontal cuando no caben todos los edificios */
+.capa-ciudad {
+  overflow-x: auto;
+  overflow-y: hidden;
+  outline: none;
+  scrollbar-color: rgba(255, 255, 255, 0.5) transparent;
+}
+.ciudad {
+  position: relative;
+  height: 100%;
+  background: #2f5fa8;
+}
+.ciudad-suelo {
+  /* Paisaje de 900 de alto, pegado abajo */
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 900px;
+}
 
 .paisaje {
   position: absolute;
@@ -103,13 +135,15 @@
 .nube-c.grande { width: 170px; height: 40px; }
 .nube-c.pequena { width: 80px; height: 22px; opacity: 0.7; }
 
-/* Edificio de DEFENSEM en la ciudad */
+/* Edificio de cada proyecto en la ciudad (posición y alto los pone la escena) */
 .edificio-ciudad {
   position: absolute;
-  left: 480px;
-  top: 280px;
+  z-index: 1;
   width: 240px;
-  height: 424px;
+}
+.edificio-ciudad:hover,
+.edificio-ciudad:focus-within {
+  z-index: 5;
 }
 .edificio-ciudad::after {
   /* sombra en el suelo */
@@ -156,10 +190,10 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border: 4px solid #1f6a2c;
+  border: 4px solid var(--edificio-oscuro);
   border-radius: 8px;
   background: #fbf6ea;
-  box-shadow: 0 4px 0 #17521f;
+  box-shadow: 0 4px 0 var(--edificio-sombra);
   font-family: var(--font-display);
   font-weight: 800;
   line-height: 1;
@@ -172,12 +206,13 @@
   bottom: -14px;
   width: 6px;
   height: 10px;
-  background: #1f6a2c;
+  background: var(--edificio-oscuro);
 }
 .fachada-letrero::before { left: 40px; }
 .fachada-letrero::after { right: 40px; }
-.fachada-letrero .verde { color: #298d3b; font-size: 26px; letter-spacing: 0.04em; }
-.fachada-letrero .rojo { color: #da1415; font-size: 14px; letter-spacing: 0.12em; }
+.fachada-letrero .principal { font-size: 26px; letter-spacing: 0.04em; }
+.fachada-letrero .principal:only-child { font-size: 32px; letter-spacing: 0.08em; }
+.fachada-letrero .secundario { font-size: 14px; letter-spacing: 0.12em; }
 
 .fachada-cuerpo {
   position: absolute;
@@ -192,8 +227,8 @@
   border-radius: 4px 4px 0 0;
   background:
     repeating-linear-gradient(90deg, transparent 0 38px, rgba(0, 0, 0, 0.05) 38px 40px),
-    linear-gradient(90deg, #2a9a3f, #298d3b 60%, #237a33);
-  box-shadow: inset 0 10px 0 #237a33, inset 0 14px 0 #3aa64e, 0 0 0 2px #1f6a2c;
+    linear-gradient(90deg, var(--edificio-claro), var(--edificio) 60%, var(--edificio-medio));
+  box-shadow: inset 0 10px 0 var(--edificio-medio), inset 0 14px 0 var(--edificio-claro), 0 0 0 2px var(--edificio-oscuro);
 }
 .fachada-cuerpo::after {
   /* destello al abrirse la fachada */
@@ -213,7 +248,7 @@
   align-items: center;
   justify-content: space-evenly;
   padding: 8px 4px 10px;
-  border-bottom: 4px solid #1f6a2c;
+  border-bottom: 4px solid var(--edificio-oscuro);
 }
 .fachada-planta.ventanas-2 {
   justify-content: space-between;
@@ -340,7 +375,7 @@
 .tarjeta-edificio {
   position: absolute;
   z-index: 1;
-  right: calc(100% + 34px);
+  left: calc(100% + 30px);
   top: 110px;
   width: 270px;
   padding: 18px;
@@ -350,7 +385,7 @@
   color: var(--color-text);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
   opacity: 0;
-  transform: translateX(10px);
+  transform: translateX(-10px);
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
@@ -358,7 +393,7 @@
   /* puente invisible para no perder el hover */
   content: "";
   position: absolute;
-  left: 100%;
+  right: 100%;
   top: 0;
   bottom: 0;
   width: 40px;
@@ -404,7 +439,6 @@
 /* Solar para un proyecto futuro */
 .solar {
   position: absolute;
-  left: 880px;
   top: 590px;
   width: 240px;
   height: 130px;
@@ -445,6 +479,9 @@
   left: 100px;
   top: 40px;
   width: 1000px;
+  /* Los edificios con muchos pisos se reducen para caber en el lienzo */
+  transform: scale(var(--encaje, 1));
+  transform-origin: 50% 0;
 }
 .corte[data-cielo="amanecer"] { --oscuridad: rgba(255, 190, 150, 0.14); --halo: 0.55; }
 .corte[data-cielo="atardecer"] { --oscuridad: rgba(170, 90, 110, 0.26); --halo: 0.75; }
@@ -466,25 +503,23 @@
   bottom: 0;
   height: 16px;
   border-radius: 4px 4px 0 0;
-  background: #237a33;
-  box-shadow: inset 0 4px 0 #3aa64e;
+  background: var(--edificio-medio);
+  box-shadow: inset 0 4px 0 var(--edificio-claro);
 }
 .letrero {
   position: relative;
   z-index: 1;
   padding: 8px 22px;
-  border: 4px solid #1f6a2c;
+  border: 4px solid var(--edificio-oscuro);
   border-radius: 8px;
   background: #fbf6ea;
-  box-shadow: 0 4px 0 #17521f;
+  box-shadow: 0 4px 0 var(--edificio-sombra);
   font-family: var(--font-display);
   font-size: 24px;
   font-weight: 800;
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
-.letrero .verde { color: #298d3b; }
-.letrero .rojo { color: #da1415; }
 
 .corte-pisos {
   position: relative;
@@ -492,7 +527,7 @@
   flex-direction: column;
   gap: 14px;
   padding: 0 20px;
-  background: #298d3b;
+  background: var(--edificio);
   box-shadow: 0 30px 40px rgba(0, 0, 0, 0.35);
 }
 .corte-pisos::after {
@@ -893,7 +928,7 @@
     linear-gradient(#3b5fa8, #f2b27a 70%, #f08a4b);
 }
 
-.cuadro-defensem {
+.cuadro-nombre {
   position: absolute;
   width: 116px;
   height: 78px;
@@ -909,14 +944,14 @@
   font-weight: 800;
   line-height: 1;
 }
-.cuadro-defensem .marca { color: #298d3b; font-size: 18px; letter-spacing: 0.03em; }
-.cuadro-defensem .sub { color: #da1415; font-size: 9px; letter-spacing: 0.1em; }
-.cuadro-defensem .franja {
+.cuadro-nombre .marca { font-size: 18px; letter-spacing: 0.03em; }
+.cuadro-nombre .marca:has(+ .franja) { font-size: 24px; letter-spacing: 0.08em; }
+.cuadro-nombre .sub { font-size: 9px; letter-spacing: 0.1em; }
+.cuadro-nombre .franja {
   width: 60%;
   height: 5px;
   margin-top: 4px;
   border-radius: 3px;
-  background: linear-gradient(90deg, #298d3b 0 50%, #da1415 50%);
 }
 
 /* Alfombras (vistas de lado: una franja en el suelo) */
@@ -1103,7 +1138,7 @@
   width: 46px;
   height: 22px;
   border-radius: 23px 23px 4px 4px;
-  background: linear-gradient(90deg, #1f6a2c, #298d3b 50%, #1f6a2c);
+  background: linear-gradient(90deg, var(--edificio-oscuro, #1f6a2c), var(--edificio, #298d3b) 50%, var(--edificio-oscuro, #1f6a2c));
   box-shadow: inset 0 -3px 0 #c9a227;
 }
 .lampara-colgante .campana::after {
@@ -1290,6 +1325,242 @@
   border-radius: 3px;
   background: repeating-linear-gradient(90deg, #7a2e3a 0 6px, #6a2632 6px 12px);
   box-shadow: inset 0 0 0 2px #e9c46a;
+}
+
+/* ───────────── Decoración de estilo "escuela" (CIFA) ───────────── */
+
+/* Pizarra verde de clase */
+.pizarra-clase {
+  position: absolute;
+  height: 92px;
+  border: 6px solid #8a5a35;
+  border-radius: 3px;
+  background:
+    radial-gradient(ellipse at 30% 30%, rgba(255, 255, 255, 0.06), transparent 60%),
+    #2f5240;
+  box-shadow: 0 5px 8px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+.pizarra-clase svg {
+  position: absolute;
+  inset: 4px;
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+}
+.pizarra-clase .repisa {
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  bottom: -12px;
+  height: 6px;
+  border-radius: 2px;
+  background: #6b4427;
+}
+.pizarra-clase .repisa::after {
+  /* tizas y borrador */
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: -4px;
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+  background: #f4f2ec;
+  box-shadow: 16px 0 0 #f5b841, 40px -2px 0 2px #2b2f40;
+}
+
+/* Libros de cursos: más gruesos y con etiqueta */
+.estanteria-cursos .libro {
+  position: relative;
+  width: 12px;
+}
+.estanteria-cursos .libro::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 28%;
+  height: 5px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.85);
+}
+.estanteria-cursos .libro.tumbado::after { display: none; }
+
+/* Calendario de pared */
+.calendario {
+  position: absolute;
+  width: 84px;
+  height: 96px;
+  border-radius: 3px;
+  background: #fffdf7;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+.calendario .mes {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 22px;
+  background: var(--edificio, #3f60de);
+}
+.calendario .anillas {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 4px;
+  z-index: 1;
+  height: 8px;
+  background: radial-gradient(circle, #2b2f40 0 2.5px, transparent 3px) 0 0 / 14px 8px repeat-x;
+}
+.calendario .dias {
+  position: absolute;
+  inset: 28px 6px 6px;
+  background:
+    radial-gradient(circle at 38% 30%, transparent 0 6px, #da1415 6.5px 8px, transparent 8.5px),
+    radial-gradient(circle at 80% 72%, transparent 0 6px, #da1415 6.5px 8px, transparent 8.5px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.12) 1px, transparent 1px) 0 0 / 14.3% 100%,
+    linear-gradient(rgba(0, 0, 0, 0.12) 1px, transparent 1px) 0 0 / 100% 20%;
+}
+
+/* Archivador metálico */
+.archivador {
+  position: absolute;
+  width: 64px;
+  height: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 3px;
+  background: #9aa3b2;
+  box-shadow: 0 8px 8px -4px rgba(0, 0, 0, 0.35), inset 0 3px 0 #c5ccd9;
+}
+.archivador .cajon {
+  position: relative;
+  flex: 1;
+  border-radius: 2px;
+  background: #b8bec9;
+  box-shadow: inset 0 -2px 0 #8f97a8;
+}
+.archivador .cajon::after {
+  /* tirador y etiqueta */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 18px;
+  height: 4px;
+  margin-left: -9px;
+  border-radius: 2px;
+  background: #5b6378;
+  box-shadow: 0 -8px 0 -1px #fffdf7;
+}
+
+/* Micrófono de doblaje */
+.micro-doblaje {
+  position: absolute;
+  width: 70px;
+  height: 196px;
+}
+.micro-doblaje .antipop {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 3px solid #2b2f40;
+  background: repeating-linear-gradient(45deg, rgba(43, 47, 64, 0.35) 0 1px, transparent 1px 4px), rgba(220, 225, 235, 0.35);
+}
+.micro-doblaje .capsula {
+  position: absolute;
+  left: 40px;
+  top: 0;
+  width: 20px;
+  height: 46px;
+  border-radius: 10px;
+  background: repeating-linear-gradient(180deg, #454b62 0 2px, #2b2f40 2px 4px);
+  box-shadow: 0 0 0 3px #1b2136;
+}
+.micro-doblaje .pie-micro {
+  position: absolute;
+  left: 48px;
+  top: 46px;
+  width: 4px;
+  height: 146px;
+  background: #2b2f40;
+}
+.micro-doblaje .pie-micro::after {
+  /* trípode */
+  content: "";
+  position: absolute;
+  left: -20px;
+  bottom: -4px;
+  width: 44px;
+  height: 8px;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: #2b2f40;
+}
+
+/* Panel de espuma acústica */
+.panel-acustico {
+  position: absolute;
+  height: 150px;
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08) 25%, transparent 25% 50%, rgba(0, 0, 0, 0.12) 50% 75%, transparent 75%) 0 0 / 30px 30px,
+    repeating-conic-gradient(#3d3758 0 25%, #4a4366 0 50%) 0 0 / 60px 60px;
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3), inset 0 0 0 4px #2a2540;
+}
+
+/* Cartel luminoso: se enciende si alguien del piso trabaja */
+.rotulo {
+  position: absolute;
+  padding: 5px 10px;
+  border-radius: 5px;
+  background: #5a1a1f;
+  color: #c9a5a8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 #0b0f1a;
+}
+.piso:has(.trabajando) .rotulo {
+  background: #da1415;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(218, 20, 21, 0.7);
+}
+
+/* Objetos de mesa de CIFA */
+.micro-mesa {
+  position: absolute;
+  left: 36px;
+  top: 112px;
+  z-index: 2;
+  width: 14px;
+  height: 26px;
+  border-radius: 7px 7px 3px 3px;
+  background: repeating-linear-gradient(180deg, #2b2f40 0 2px, #454b62 2px 4px);
+  box-shadow: 0 6px 0 -2px #1b2136, 0 10px 0 -1px #2b2f40;
+}
+.libreta {
+  position: absolute;
+  right: 62px;
+  top: 136px;
+  z-index: 2;
+  width: 30px;
+  height: 22px;
+  border-radius: 2px 4px 4px 2px;
+  background: var(--edificio, #3f60de);
+  box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.25), inset -6px 0 0 -4px #f5b841;
+  transform: rotate(6deg);
+}
+.marca-proyecto .portatil {
+  --brillo: var(--edificio, #3f60de);
+  background: var(--edificio, #3f60de);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--edificio, #3f60de) 70%, black);
+}
+.puesto.inactivo .lampara-mesa .halo {
+  opacity: calc(var(--halo) * 0.3);
 }
 
 /* ───────────── Puesto: personaje + escritorio ───────────── */
@@ -1844,7 +2115,7 @@
 }
 @keyframes nube-cruza {
   from { transform: translateX(-260px); }
-  to { transform: translateX(1460px); }
+  to { transform: translateX(calc(var(--ancho-ciudad, 1200px) + 260px)); }
 }
 @keyframes parpadeo-rojo {
   0%, 100% { filter: brightness(1); box-shadow: 0 0 18px 4px rgba(218, 20, 21, 0.7); }

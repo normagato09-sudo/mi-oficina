@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import type { Luz } from "@/lib/estado";
 
 const ANCHO = 1200;
+/** Línea del suelo en la ciudad (px de diseño, dentro de un paisaje de 900 de alto). */
+const SUELO = 704;
+const MARGEN_CIUDAD = 140;
+const ANCHO_PARCELA = 350;
+const ANCHO_SOLAR = 240;
 
 /** Un piso de la fachada (un departamento) con una ventana por agente. */
 export type PisoFachada = {
@@ -12,19 +17,47 @@ export type PisoFachada = {
   ventanas: { id: string; nombre: string; texto: string; luz: Luz }[];
 };
 
-type Props = {
+/** Lo que la ciudad necesita de cada proyecto para dibujar su edificio. */
+export type ProyectoCiudad = {
+  id: string;
   nombre: string;
+  letrero: { principal: string; secundario: string | null; color: string; colorSecundario: string };
   resumen: string;
   estado: string;
   /** "⚠ X agentes te necesitan", si alguno está en rojo. */
   aviso?: string;
   fachada: PisoFachada[];
-  /** Altura del lienzo (px de diseño): depende del número de pisos. */
+};
+
+type Props = {
+  proyectos: ProyectoCiudad[];
+  /** Interior (edificio en corte) de cada proyecto, por id. */
+  interiores: Record<string, ReactNode>;
+  /** Altura del lienzo (px de diseño): depende del edificio con más pisos. */
   alto: number;
   dentroInicial: boolean;
+  actualInicial: string;
   hayFicha: boolean;
-  interior: ReactNode;
 };
+
+/** Centro horizontal de la parcela del edificio i en la ciudad. */
+function centroParcela(i: number): number {
+  return MARGEN_CIUDAD + ANCHO_PARCELA / 2 + i * ANCHO_PARCELA;
+}
+
+/** Alto del edificio en la ciudad: letrero + un piso por departamento + planta baja con la puerta. */
+function altoFachada(pisos: number): number {
+  return 72 + 22 + Math.max(pisos, 1) * 84 + 108;
+}
+
+/** Línea de una colina ondulada a lo ancho de toda la ciudad (siempre continua). */
+function colina(ancho: number, base: number, amp: number, periodo: number, fase: number): string {
+  const y = (x: number) =>
+    base + amp * Math.sin((x / periodo) * 2 * Math.PI + fase) + amp * 0.45 * Math.sin((x / (periodo * 0.41)) * 2 * Math.PI + fase * 1.7);
+  let d = `M0 ${y(0).toFixed(1)}`;
+  for (let x = 30; x <= ancho + 30; x += 30) d += ` L${x} ${y(x).toFixed(1)}`;
+  return `${d} L${ancho + 30} 900 L0 900 Z`;
+}
 
 /** Molino de viento: torre y aspas que giran. */
 function Molino({ x, y, escala = 1, retraso = 0 }: { x: number; y: number; escala?: number; retraso?: number }) {
@@ -65,10 +98,14 @@ function Arbol({ x, y, r = 16 }: { x: number; y: number; r?: number }) {
   );
 }
 
-/** Paisaje del Empordanet al atardecer (fijo, dibujado en SVG). */
-function Paisaje({ id }: { id: string }) {
+/**
+ * Paisaje del Empordanet al atardecer, del ancho que haga falta.
+ * Con `parcelas`, dibuja una carretera hasta la puerta de cada edificio.
+ */
+function Paisaje({ id, ancho, parcelas = [] }: { id: string; ancho: number; parcelas?: number[] }) {
+  const tramos = Math.ceil(ancho / ANCHO);
   return (
-    <svg className="paisaje" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <svg className="paisaje" viewBox={`0 0 ${ancho} 900`} preserveAspectRatio="xMidYMax slice" aria-hidden="true">
       <defs>
         <linearGradient id={`${id}-cielo`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#2f5fa8" />
@@ -87,46 +124,45 @@ function Paisaje({ id }: { id: string }) {
         </linearGradient>
       </defs>
 
-      <rect width="1200" height="900" fill={`url(#${id}-cielo)`} />
-      <circle cx="870" cy="405" r="170" fill={`url(#${id}-sol)`} />
-      <circle cx="870" cy="405" r="40" fill="#ffd27a" />
+      <rect width={ancho} height="900" fill={`url(#${id}-cielo)`} />
+      <circle cx={ancho - 330} cy="405" r="170" fill={`url(#${id}-sol)`} />
+      <circle cx={ancho - 330} cy="405" r="40" fill="#ffd27a" />
 
       {/* Colinas lejanas, medias y cercanas */}
-      <path d="M0 500 C 120 450, 240 470, 340 440 C 460 405, 560 470, 680 455 C 800 440, 900 410, 1020 440 C 1100 460, 1160 450, 1200 445 L1200 900 L0 900 Z" fill="#7d8f6a" opacity="0.85" />
-      <path d="M0 560 C 140 510, 260 540, 380 515 C 520 485, 620 545, 760 530 C 900 515, 1000 490, 1200 520 L1200 900 L0 900 Z" fill="#5f8a4a" />
-      <path d="M0 640 C 160 600, 320 625, 470 610 C 620 595, 760 640, 920 620 C 1040 605, 1120 600, 1200 610 L1200 900 L0 900 Z" fill="#4f7d3c" />
-      <path d="M0 700 C 200 680, 420 690, 600 685 C 800 680, 1000 700, 1200 690 L1200 900 L0 900 Z" fill="#6a9a48" />
+      <path d={colina(ancho, 455, 22, 640, 0.6)} fill="#7d8f6a" opacity="0.85" />
+      <path d={colina(ancho, 525, 18, 560, 2.1)} fill="#5f8a4a" />
+      <path d={colina(ancho, 615, 14, 700, 4)} fill="#4f7d3c" />
+      <path d={colina(ancho, 690, 7, 900, 1)} fill="#6a9a48" />
 
-      {/* Campos */}
-      <path d="M0 760 L380 720 L420 900 L0 900 Z" fill="#7aa452" opacity="0.6" />
-      <path d="M820 720 L1200 740 L1200 900 L790 900 Z" fill="#c9a24f" opacity="0.45" />
-      <path d="M830 750 L1200 770 M835 780 L1200 800 M840 810 L1200 830" stroke="#a9853a" strokeWidth="2" opacity="0.5" />
+      {/* Campos y molinos, repetidos cada 1200 px */}
+      {Array.from({ length: tramos }, (_, t) => {
+        const o = t * ANCHO;
+        return (
+          <g key={t}>
+            <path d={`M${o} 790 L${o + 300} 760 L${o + 340} 900 L${o} 900 Z`} fill="#7aa452" opacity="0.5" />
+            <path d={`M${o + 860} 770 L${o + 1180} 780 L${o + 1200} 900 L${o + 830} 900 Z`} fill="#c9a24f" opacity="0.4" />
+            <Molino x={o + 150} y={520} escala={0.9} retraso={-t * 0.7} />
+            <Molino x={o + 268} y={500} escala={0.7} retraso={-1.3 - t} />
+            <Molino x={o + 1010} y={500} escala={0.85} retraso={-0.6 - t} />
+            <Molino x={o + 1110} y={512} escala={0.65} retraso={-2.1 - t} />
+            <Arbol x={o + 60} y={760} r={22} />
+            <Arbol x={o + 1160} y={770} r={22} />
+          </g>
+        );
+      })}
 
-      {/* Molinos */}
-      <Molino x={150} y={520} escala={0.9} />
-      <Molino x={268} y={500} escala={0.7} retraso={-1.3} />
-      <Molino x={1010} y={500} escala={0.85} retraso={-0.6} />
-      <Molino x={1110} y={512} escala={0.65} retraso={-2.1} />
-
-      {/* Carretera hasta la puerta */}
-      <path d="M520 900 C 560 820, 590 760, 588 704 L612 704 C 614 760, 650 820, 700 900 Z" fill={`url(#${id}-carretera)`} />
-      <path d="M610 900 C 606 830, 600 760, 600 708" stroke="#f5e9c8" strokeWidth="3" strokeDasharray="14 12" fill="none" />
-      <path d="M0 790 C 200 770, 400 760, 560 790" stroke="#5a5862" strokeWidth="16" fill="none" opacity="0.8" />
-
-      {/* Árboles */}
-      <Cipres x={540} y={760} alto={60} />
-      <Cipres x={668} y={760} alto={58} />
-      <Cipres x={504} y={830} alto={70} />
-      <Cipres x={720} y={840} alto={70} />
-      <Arbol x={380} y={690} r={20} />
-      <Arbol x={430} y={710} r={15} />
-      <Arbol x={80} y={730} r={22} />
-      <Arbol x={230} y={760} r={18} />
-      <Arbol x={800} y={690} r={18} />
-      <Arbol x={1160} y={770} r={22} />
-      <Cipres x={330} y={640} alto={40} />
-      <Cipres x={350} y={645} alto={34} />
-      <Cipres x={860} y={640} alto={38} />
+      {/* Carretera principal y un ramal hasta la puerta de cada edificio */}
+      <rect x="0" y="825" width={ancho} height="34" fill="#5a5862" />
+      <path d={`M0 842 L${ancho} 842`} stroke="#f5e9c8" strokeWidth="3" strokeDasharray="18 16" opacity="0.8" />
+      {parcelas.map((cx) => (
+        <g key={cx}>
+          <path d={`M${cx - 44} 828 C ${cx - 30} 790, ${cx - 14} 740, ${cx - 12} ${SUELO} L${cx + 12} ${SUELO} C ${cx + 14} 740, ${cx + 30} 790, ${cx + 44} 828 Z`} fill={`url(#${id}-carretera)`} />
+          <Cipres x={cx - 78} y={760} alto={60} />
+          <Cipres x={cx + 78} y={760} alto={58} />
+          <Arbol x={cx - 140} y={720} r={18} />
+          <Arbol x={cx + 140} y={730} r={15} />
+        </g>
+      ))}
     </svg>
   );
 }
@@ -142,15 +178,91 @@ function Nubes() {
   );
 }
 
-/** Pantallas 1 y 2: la ciudad y, al entrar, el edificio en corte. */
-export default function Escena({ nombre, resumen, estado, aviso, fachada, alto, dentroInicial, hayFicha, interior }: Props) {
+/** Edificio de un proyecto en la ciudad, con su tarjeta al pasar el ratón. */
+function EdificioCiudad({ proyecto, cx, elegido, onEntrar, refBoton }: { proyecto: ProyectoCiudad; cx: number; elegido: boolean; onEntrar: () => void; refBoton: (el: HTMLButtonElement | null) => void }) {
+  const alto = altoFachada(proyecto.fachada.length);
+  const { letrero } = proyecto;
+  return (
+    <div
+      className={`edificio-ciudad${elegido ? " elegido" : ""}`}
+      style={{ left: cx - 120, top: SUELO - alto, height: alto, "--edificio": letrero.color } as CSSProperties}
+    >
+      <button
+        ref={refBoton}
+        type="button"
+        className="fachada"
+        onClick={onEntrar}
+        aria-label={`Entrar al edificio ${proyecto.nombre}. ${proyecto.fachada
+          .flatMap((p) => p.ventanas)
+          .map((v) => `${v.nombre}: ${v.texto}`)
+          .join(". ")}`}
+      >
+        <span className="fachada-letrero" aria-hidden="true">
+          <span className="principal" style={{ color: letrero.color }}>
+            {letrero.principal}
+          </span>
+          {letrero.secundario && (
+            <span className="secundario" style={{ color: letrero.colorSecundario }}>
+              {letrero.secundario}
+            </span>
+          )}
+        </span>
+        <span className="fachada-cuerpo" aria-hidden="true">
+          {proyecto.fachada.map((piso) => (
+            <span key={piso.id} className={`fachada-planta ventanas-${Math.min(piso.ventanas.length, 3)}`}>
+              {piso.ventanas.map((v) => (
+                <span key={v.id} className={`fachada-ventana luz-${v.luz}`}>
+                  <span className="globo">
+                    {v.nombre} · {v.texto}
+                  </span>
+                </span>
+              ))}
+            </span>
+          ))}
+          <span className="fachada-puerta" />
+          <span className="fachada-farol izq" />
+          <span className="fachada-farol der" />
+        </span>
+      </button>
+
+      <div className="tarjeta-edificio" role="group" aria-label={`Proyecto ${proyecto.nombre}`}>
+        <p className="tarjeta-nombre">{proyecto.nombre}</p>
+        <p className="tarjeta-dato">{proyecto.resumen}</p>
+        <p className="tarjeta-dato">
+          <span className="tarjeta-punto" aria-hidden="true" /> {proyecto.estado}
+        </p>
+        {proyecto.aviso && <p className="tarjeta-aviso">{proyecto.aviso}</p>}
+        <button type="button" className="btn-primary mt-3 w-full" onClick={onEntrar}>
+          Entrar al edificio
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Pantallas 1 y 2: la ciudad con todos los proyectos y, al entrar, el edificio elegido en corte. */
+export default function Escena({ proyectos, interiores, alto, dentroInicial, actualInicial, hayFicha }: Props) {
   const router = useRouter();
   const [dentro, setDentro] = useState(dentroInicial);
+  const [actual, setActual] = useState(actualInicial);
+  const [origen, setOrigen] = useState(() => centroParcela(Math.max(0, proyectos.findIndex((p) => p.id === actualInicial))));
   const [escala, setEscala] = useState<number | null>(null);
+  // Si la página llega con otra vista (enlace de la cabecera, ficha…), la escena la sigue.
+  const [vistaPrevia, setVistaPrevia] = useState(`${dentroInicial}|${actualInicial}`);
+  if (vistaPrevia !== `${dentroInicial}|${actualInicial}`) {
+    setVistaPrevia(`${dentroInicial}|${actualInicial}`);
+    setDentro(dentroInicial);
+    setActual(actualInicial);
+  }
+
   const marco = useRef<HTMLDivElement>(null);
-  const botonEdificio = useRef<HTMLButtonElement>(null);
+  const ciudad = useRef<HTMLDivElement>(null);
+  const botones = useRef<Record<string, HTMLButtonElement | null>>({});
   const botonVolver = useRef<HTMLButtonElement>(null);
-  const primeraVez = useRef(true);
+  const dentroAntes = useRef(dentro);
+
+  const anchoCiudad = Math.max(ANCHO, MARGEN_CIUDAD + proyectos.length * ANCHO_PARCELA + ANCHO_SOLAR + 100);
+  const parcelas = proyectos.map((_, i) => centroParcela(i));
 
   // El lienzo se dibuja a 1200 px y se escala al ancho disponible.
   useLayoutEffect(() => {
@@ -163,19 +275,20 @@ export default function Escena({ nombre, resumen, estado, aviso, fachada, alto, 
     return () => ro.disconnect();
   }, []);
 
-  // Al terminar la animación, el foco pasa al control visible.
+  // Al entrar o salir, cuando acaba la animación, el foco pasa al control visible.
   useEffect(() => {
-    if (primeraVez.current) {
-      primeraVez.current = false;
-      return;
-    }
-    const id = setTimeout(() => (dentro ? botonVolver : botonEdificio).current?.focus({ preventScroll: true }), 900);
+    if (dentroAntes.current === dentro) return;
+    dentroAntes.current = dentro;
+    const id = setTimeout(() => (dentro ? botonVolver.current : botones.current[actual])?.focus({ preventScroll: true }), 900);
     return () => clearTimeout(id);
-  }, [dentro]);
+  }, [dentro, actual]);
 
-  function entrar() {
+  function entrar(id: string, i: number) {
+    // El zoom sale del edificio elegido, tal como se ve ahora (con el desplazamiento de la ciudad).
+    setOrigen(centroParcela(i) - (ciudad.current?.scrollLeft ?? 0));
+    setActual(id);
     setDentro(true);
-    window.history.replaceState(null, "", "/?vista=edificio");
+    window.history.replaceState(null, "", `/?vista=edificio&proyecto=${id}`);
   }
 
   function volver() {
@@ -187,77 +300,54 @@ export default function Escena({ nombre, resumen, estado, aviso, fachada, alto, 
   const estilo = {
     "--escala": escala ?? 1,
     "--alto": `${alto}px`,
+    "--origen-x": `${origen}px`,
+    "--ancho-ciudad": `${anchoCiudad}px`,
     aspectRatio: `${ANCHO} / ${alto}`,
   } as CSSProperties;
 
   return (
     <div ref={marco} className="escena" data-dentro={dentro} data-medida={escala !== null} style={estilo}>
       <div className="lienzo">
-        {/* Pantalla 1 · la ciudad */}
-        <div className="capa-ciudad" inert={dentro}>
-          <Paisaje id="ciudad" />
-          <Nubes />
-
-          <div className="edificio-ciudad">
-            <button
-              ref={botonEdificio}
-              type="button"
-              className="fachada"
-              onClick={entrar}
-              aria-label={`Entrar al edificio ${nombre}. ${fachada
-                .flatMap((p) => p.ventanas)
-                .map((v) => `${v.nombre}: ${v.texto}`)
-                .join(". ")}`}
-            >
-              <span className="fachada-letrero" aria-hidden="true">
-                <span className="verde">DEFENSEM</span>
-                <span className="rojo">L&apos;EMPORDANET</span>
-              </span>
-              <span className="fachada-cuerpo" aria-hidden="true">
-                {fachada.map((piso) => (
-                  <span key={piso.id} className={`fachada-planta ventanas-${Math.min(piso.ventanas.length, 3)}`}>
-                    {piso.ventanas.map((v) => (
-                      <span key={v.id} className={`fachada-ventana luz-${v.luz}`}>
-                        <span className="globo">
-                          {v.nombre} · {v.texto}
-                        </span>
-                      </span>
-                    ))}
-                  </span>
-                ))}
-                <span className="fachada-puerta" />
-                <span className="fachada-farol izq" />
-                <span className="fachada-farol der" />
-              </span>
-            </button>
-
-            <div className="tarjeta-edificio" role="group" aria-label={`Proyecto ${nombre}`}>
-              <p className="tarjeta-nombre">{nombre}</p>
-              <p className="tarjeta-dato">{resumen}</p>
-              <p className="tarjeta-dato">
-                <span className="tarjeta-punto" aria-hidden="true" /> {estado}
-              </p>
-              {aviso && <p className="tarjeta-aviso">{aviso}</p>}
-              <button type="button" className="btn-primary mt-3 w-full" onClick={entrar}>
-                Entrar al edificio
+        {/* Pantalla 1 · la ciudad (se desliza en horizontal si no caben todos los edificios) */}
+        <div ref={ciudad} className="capa-ciudad" inert={dentro} tabIndex={-1}>
+          <div className="ciudad" style={{ width: anchoCiudad }}>
+            <div className="ciudad-suelo">
+              <Paisaje id="ciudad" ancho={anchoCiudad} parcelas={parcelas} />
+              <Nubes />
+              {proyectos.map((p, i) => (
+                <EdificioCiudad
+                  key={p.id}
+                  proyecto={p}
+                  cx={parcelas[i]}
+                  elegido={p.id === actual}
+                  onEntrar={() => entrar(p.id, i)}
+                  refBoton={(el) => {
+                    botones.current[p.id] = el;
+                  }}
+                />
+              ))}
+              <button
+                type="button"
+                className="solar"
+                style={{ left: MARGEN_CIUDAD + proyectos.length * ANCHO_PARCELA + 30 }}
+                disabled
+                title="Próximamente"
+              >
+                <span aria-hidden="true">+</span> Nuevo proyecto
               </button>
             </div>
           </div>
-
-          <button type="button" className="solar" disabled title="Próximamente">
-            <span aria-hidden="true">+</span> Nuevo proyecto
-          </button>
         </div>
 
-        {/* Pantalla 2 · dentro del edificio */}
+        {/* Pantalla 2 · dentro del edificio elegido */}
         <div className="capa-interior" inert={!dentro}>
           <div className="fondo-interior" aria-hidden="true">
-            <Paisaje id="fondo" />
+            <Paisaje id="fondo" ancho={ANCHO} />
           </div>
           <button ref={botonVolver} type="button" className="btn-secondary volver" onClick={volver}>
             ← Volver a la ciudad
           </button>
-          {interior}
+          {interiores[actual]}
         </div>
       </div>
     </div>

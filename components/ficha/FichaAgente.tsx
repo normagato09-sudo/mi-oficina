@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { AgenteConEstado } from "@/lib/datos";
 import { COLOR_LUZ, estadoAgente } from "@/lib/estado";
+import type { Edificio } from "@/lib/tipos";
 
 type Props = {
   agente: AgenteConEstado;
-  edificioNombre: string;
+  edificio: Edificio;
   children?: React.ReactNode;
 };
 
@@ -18,8 +19,8 @@ function iniciales(nombre: string): string {
 }
 
 /** Ficha del agente: panel a la derecha en escritorio y a pantalla completa en móvil. */
-export default function FichaAgente({ agente, edificioNombre, children }: Props) {
-  const estado = estadoAgente(agente.estados, agente.sinVer);
+export default function FichaAgente({ agente, edificio, children }: Props) {
+  const estado = estadoAgente(agente);
   return (
     <aside
       aria-labelledby="ficha-titulo"
@@ -28,7 +29,7 @@ export default function FichaAgente({ agente, edificioNombre, children }: Props)
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-ink/95 px-4 py-2 backdrop-blur lg:bg-panel/95">
         <span className="text-sm text-muted">Ficha del agente</span>
         <Link
-          href="/?vista=edificio"
+          href={`/?vista=edificio&proyecto=${edificio.id}`}
           scroll={false}
           className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-2xl leading-none text-muted hover:text-text"
           aria-label="Cerrar ficha"
@@ -41,7 +42,8 @@ export default function FichaAgente({ agente, edificioNombre, children }: Props)
         <div className="flex items-center gap-4">
           <span
             aria-hidden="true"
-            className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-[#DA1415] font-display text-2xl font-extrabold text-white shadow-[0_3px_0_#9c0e0f]"
+            className="flex size-16 shrink-0 items-center justify-center rounded-2xl font-display text-2xl font-extrabold text-white shadow-[0_3px_0_rgba(0,0,0,0.35)]"
+            style={{ background: estado.inactivo ? "#5b6378" : edificio.color }}
           >
             {iniciales(agente.nombre)}
           </span>
@@ -50,7 +52,7 @@ export default function FichaAgente({ agente, edificioNombre, children }: Props)
               {agente.nombre}
             </h2>
             <p className="truncate text-sm text-muted">
-              {edificioNombre} · {agente.departamento.nombre}
+              {edificio.nombre} · {agente.departamento.nombre}
             </p>
             <p className="mt-1 flex items-center gap-2 text-sm">
               <span aria-hidden="true" className="size-2.5 rounded-full" style={{ background: COLOR_LUZ[estado.luz] }} />

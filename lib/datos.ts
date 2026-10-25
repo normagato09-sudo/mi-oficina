@@ -27,23 +27,24 @@ function contarEstados(filas: { estado: EstadoPublicacion }[]): Record<EstadoPub
   return estados;
 }
 
-/** Carga el (de momento único) edificio con sus departamentos, agentes y recuento de estados. */
-export async function cargarOficina(): Promise<DatosOficina> {
+/** Carga todos los proyectos (edificios) con sus departamentos, agentes y recuento de estados. */
+export async function cargarCiudad(): Promise<DatosOficina[]> {
   const db = supabase();
 
-  const { data: edificio, error: e1 } = await db
+  const { data: edificios, error: e1 } = await db
     .from("edificios")
     .select("*")
     .order("creado_en")
-    .limit(1)
-    .maybeSingle<Edificio>();
-  if (e1) throw new Error(`No se pudo leer el edificio: ${e1.message}`);
-  if (!edificio) throw new Error("No hay ningún edificio. ¿Has ejecutado el SQL de la migración?");
+    .returns<Edificio[]>();
+  if (e1) throw new Error(`No se pudieron leer los edificios: ${e1.message}`);
+  if (!edificios?.length) throw new Error("No hay ningún edificio. ¿Has ejecutado el SQL de la migración?");
+  // "orden" llega con la migración 0004; si aún no está, se respeta la fecha de creación.
+  edificios.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
 
   const { data: deps, error: e2 } = await db
     .from("departamentos")
     .select("*")
-    .eq("edificio_id", edificio.id)
+    .in("edificio_id", edificios.map((e) => e.id))
     .order("orden")
     .returns<Departamento[]>();
   if (e2) throw new Error(`No se pudieron leer los departamentos: ${e2.message}`);
@@ -77,13 +78,33 @@ export async function cargarOficina(): Promise<DatosOficina> {
     };
   });
 
+  return edificios.map((edificio) => {
+    const suyos = (deps ?? [])
+      .filter((d) => d.edificio_id === edificio.id)
+      .map((d) => ({ ...d, agentes: conEstado.filter((a) => a.departamento_id === d.id) }));
+    return { edificio, departamentos: suyos, agentes: suyos.flatMap((d) => d.agentes) };
+  });
+}
+
+/**
+ * Lo que un agente necesita para trabajar: sus instrucciones y la ficha de SU proyecto.
+ * La ficha se busca a través de su departamento, así nunca lee la de otro edificio.
+ */
+export async function contextoAgente(agenteId: string): Promise<{
+  agente: Agente;
+  proyecto: { nombre: string; idioma: string; ficha: string };
+}> {
+  const { data, error } = await supabase()
+    .from("agentes")
+    .select("*, departamentos!inner(edificios!inner(*))")
+    .eq("id", agenteId)
+    .single<Agente & { departamentos: { edificios: Edificio } }>();
+  if (error) throw new Error(`No se pudo leer el agente: ${error.message}`);
+  const { departamentos, ...agente } = data;
+  const edificio = departamentos.edificios;
   return {
-    edificio,
-    departamentos: (deps ?? []).map((d) => ({
-      ...d,
-      agentes: conEstado.filter((a) => a.departamento_id === d.id),
-    })),
-    agentes: conEstado,
+    agente,
+    proyecto: { nombre: edificio.nombre, idioma: edificio.idioma ?? "es", ficha: edificio.ficha ?? "" },
   };
 }
 
