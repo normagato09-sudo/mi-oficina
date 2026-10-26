@@ -3,6 +3,9 @@ import Header from "@/components/Header";
 import Oficina from "@/components/oficina/Oficina";
 import FichaAgente from "@/components/ficha/FichaAgente";
 import PanelProyecto from "@/components/panel/PanelProyecto";
+import NuevoEncargo from "@/components/encargos/NuevoEncargo";
+import HistorialEncargos from "@/components/encargos/HistorialEncargos";
+import { cargarEncargos, type EncargoVista } from "@/lib/encargos";
 import { cargarCiudad, marcarVisto, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
 
@@ -41,6 +44,21 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   // Panel de la estantería del Director: ficha del proyecto y perfiles de sus agentes.
   const panelAbierto = !agente && params.panel === "proyecto";
   const dentro = params.vista === "edificio" || Boolean(agente) || panelAbierto;
+
+  // Ficha del Director: recibe encargos (y elige dónde publicar si el edificio tiene agentes de redes).
+  const esDirector = agente?.tipo === "direccion" && agente.activo !== false;
+  const redes = esDirector
+    ? proyecto.agentes.filter((a) => a.tipo === "redes" && a.activo !== false).map((a) => ({ id: a.id, nombre: a.nombre }))
+    : [];
+  let encargos: EncargoVista[] = [];
+  let errorEncargos: string | null = null;
+  if (esDirector) {
+    try {
+      encargos = await cargarEncargos(agente.id, new Map(proyecto.agentes.map((a) => [a.id, a.nombre])));
+    } catch (e) {
+      errorEncargos = e instanceof Error ? e.message : String(e);
+    }
+  }
   const numAgentes = ciudad.reduce((n, d) => n + d.agentes.length, 0);
 
   return (
@@ -74,6 +92,17 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               <p className="mt-6 rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
                 Este agente todavía no está trabajando.
               </p>
+            ) : esDirector ? (
+              <>
+                <NuevoEncargo key={agente.id} agenteId={agente.id} redes={redes} />
+                {errorEncargos ? (
+                  <p role="alert" className="mt-8 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
+                    {errorEncargos}. ¿Has ejecutado la migración 0006?
+                  </p>
+                ) : (
+                  <HistorialEncargos encargos={encargos} />
+                )}
+              </>
             ) : (
               <>
                 <div className="mt-6">
