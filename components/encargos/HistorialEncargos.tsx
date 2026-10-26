@@ -9,16 +9,16 @@ const FECHA = new Intl.DateTimeFormat("es-ES", {
   minute: "2-digit",
 });
 
-/** Historial de encargos del Director: fecha, texto, adjuntos y estado. */
+/** Encargos que ya han salido de la cola: fecha, proyecto, texto, adjuntos y estado. */
 export default function HistorialEncargos({ encargos }: { encargos: EncargoVista[] }) {
   return (
     <section aria-labelledby="encargos-titulo" className="mt-8">
       <h3 id="encargos-titulo" className="font-display text-lg font-extrabold">
-        Encargos
+        Historial
       </h3>
       {encargos.length === 0 ? (
         <p className="mt-3 rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
-          Aún no hay encargos.
+          Aún no ha salido ningún encargo de la cola.
         </p>
       ) : (
         <ol className="mt-3 flex flex-col gap-3">
@@ -33,9 +33,10 @@ export default function HistorialEncargos({ encargos }: { encargos: EncargoVista
                 </span>
               </div>
               {e.texto && <p className="mt-2 line-clamp-4 whitespace-pre-line text-sm leading-relaxed">{e.texto}</p>}
-              {e.nombresDestinos.length > 0 && (
-                <p className="mt-2 text-xs text-muted">Publicar en: {e.nombresDestinos.join(" y ")}</p>
-              )}
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-muted">
+                <span aria-hidden="true" className="size-2 rounded-[2px]" style={{ background: e.proyecto.color }} />
+                {e.proyecto.nombre}
+              </p>
               {e.adjuntos.length > 0 && (
                 <ul className="mt-3 flex flex-wrap gap-2" aria-label="Adjuntos">
                   {e.adjuntos.map((a, i) =>

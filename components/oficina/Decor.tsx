@@ -281,3 +281,75 @@ export function PuertaEntrada({ x, y }: Pos) {
     </Pieza>
   );
 }
+
+/* ───────── Planta de la oficina ───────── */
+
+/** Alfombra vista desde arriba (bajo la mesa del Director o a lo largo del pasillo). */
+export function AlfombraPlanta({ x, y, ancho, alto, tipo = "persa" }: Pos & { ancho: number; alto: number; tipo?: "persa" | "pasillo" | "descanso" }) {
+  return <Pieza x={x} y={y} className={`alfombra-planta alfombra-planta-${tipo}`} style={{ width: ancho, height: alto }} />;
+}
+
+/** Bandeja de entrada sobre la mesa del Director: un papel por encargo en cola (hasta 12). */
+export function Bandeja({ papeles }: { papeles: number }) {
+  const n = Math.min(papeles, 12);
+  return (
+    <span className="bandeja" aria-hidden="true">
+      {Array.from({ length: n }, (_, i) => (
+        <span
+          key={i}
+          className="papel-bandeja"
+          style={{ bottom: 6 + i * 3, transform: `rotate(${[-3, 2, -1, 3, -2, 1][i % 6]}deg)` }}
+        />
+      ))}
+      <span className="borde-bandeja" />
+    </span>
+  );
+}
+
+const BANDERAS = {
+  es: { nombre: "España", fondo: "linear-gradient(#aa151b 0 25%, #f1bf00 25% 75%, #aa151b 75%)" },
+  ca: { nombre: "Cataluña", fondo: "repeating-linear-gradient(#fcdd09 0 11.1%, #da121a 11.1% 22.2%)" },
+  gb: {
+    nombre: "Reino Unido",
+    fondo: [
+      "linear-gradient(90deg, transparent 43%, #c8102e 43% 57%, transparent 57%)",
+      "linear-gradient(transparent 40%, #c8102e 40% 60%, transparent 60%)",
+      "linear-gradient(90deg, transparent 38%, #fff 38% 62%, transparent 62%)",
+      "linear-gradient(transparent 33%, #fff 33% 67%, transparent 67%)",
+      "linear-gradient(33.7deg, transparent 46%, #fff 46% 54%, transparent 54%)",
+      "linear-gradient(-33.7deg, transparent 46%, #fff 46% 54%, transparent 54%)",
+      "#012169",
+    ].join(", "),
+  },
+} as const;
+
+/** Banderita en su mástil, colgada de la pared. */
+export function Bandera({ x, y, pais }: Pos & { pais: keyof typeof BANDERAS }) {
+  return (
+    <Pieza x={x} y={y} className="bandera">
+      <span className="mastil" />
+      <span className="tela" style={{ background: BANDERAS[pais].fondo }} title={BANDERAS[pais].nombre} />
+    </Pieza>
+  );
+}
+
+/** Globo terráqueo sobre su pie. */
+export function GloboTerraqueo({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="globo-terraqueo">
+      <span className="esfera" />
+      <span className="meridiano" />
+      <span className="pie-globo" />
+    </Pieza>
+  );
+}
+
+/** Mesita baja de la zona de descanso, con revistas y una taza. */
+export function Mesita({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="mesita">
+      <span className="revista" />
+      <span className="revista r2" />
+    </Pieza>
+  );
+}

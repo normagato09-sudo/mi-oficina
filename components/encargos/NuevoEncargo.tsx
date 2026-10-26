@@ -6,26 +6,30 @@ import { ACEPTA_ADJUNTOS, MAX_ADJUNTOS, MAX_BYTES_ADJUNTO, MAX_CARACTERES_ENCARG
 
 type Props = {
   agenteId: string;
-  /** Agentes de redes activos del edificio: si hay, se elige dónde publicar. */
-  redes: { id: string; nombre: string }[];
+  /** Proyectos activos: el encargo es para uno de ellos. */
+  proyectos: { id: string; nombre: string }[];
+  /** Abrir el formulario directamente (botón "+ Nuevo encargo" de la cabecera). */
+  abiertoInicial?: boolean;
 };
 
 function tamano(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Botón "Nuevo encargo" y su formulario: texto, adjuntos y (si el edificio tiene redes) dónde publicar. */
-export default function NuevoEncargo({ agenteId, redes }: Props) {
-  const [abierto, setAbierto] = useState(false);
+/** Botón "Nuevo encargo" y su formulario: proyecto, urgente, texto y adjuntos. Cada envío va al final de la cola. */
+export default function NuevoEncargo({ agenteId, proyectos, abiertoInicial = false }: Props) {
+  const [abierto, setAbierto] = useState(abiertoInicial);
+  const [proyectoId, setProyectoId] = useState(proyectos.length === 1 ? proyectos[0]!.id : "");
+  const [urgente, setUrgente] = useState(false);
   const [texto, setTexto] = useState("");
   const [archivos, setArchivos] = useState<File[]>([]);
-  const [destinos, setDestinos] = useState<string[]>(() => redes.map((r) => r.id));
   const [progreso, setProgreso] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [enviado, setEnviado] = useState(false);
+  const [enviados, setEnviados] = useState(0);
   const entrada = useRef<HTMLInputElement>(null);
   const idTexto = useId();
   const idArchivos = useId();
+  const idProyecto = useId();
 
   function anadir(lista: FileList | null) {
     if (!lista) return;
@@ -54,7 +58,7 @@ export default function NuevoEncargo({ agenteId, redes }: Props) {
     e.preventDefault();
     setError(null);
     if (!texto.trim() && !archivos.length) return setError("Escribe el encargo o adjunta algún archivo.");
-    if (redes.length && !destinos.length) return setError("Elige al menos una red donde publicar.");
+    if (!proyectoId) return setError("Elige para qué proyecto es el encargo.");
 
     try {
       let subidas: { ruta: string; nombre: string; tipo: string }[] = [];
@@ -80,14 +84,14 @@ export default function NuevoEncargo({ agenteId, redes }: Props) {
       }
 
       setProgreso(archivos.some((f) => f.type.startsWith("image/")) ? "Preparando las imágenes…" : "Guardando…");
-      const r = await enviarEncargo({ agenteId, texto, destinos, subidas });
+      const r = await enviarEncargo({ agenteId, proyectoId, texto, urgente, subidas });
       if (r.error) throw new Error(r.error);
 
+      // El formulario se queda abierto (con el mismo proyecto) para poder mandar otro seguido.
       setTexto("");
       setArchivos([]);
-      setDestinos(redes.map((x) => x.id));
-      setAbierto(false);
-      setEnviado(true);
+      setUrgente(false);
+      setEnviados((n) => n + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -103,16 +107,11 @@ export default function NuevoEncargo({ agenteId, redes }: Props) {
           className="btn-primary w-full"
           onClick={() => {
             setAbierto(true);
-            setEnviado(false);
+            setEnviados(0);
           }}
         >
           Nuevo encargo
         </button>
-        {enviado && (
-          <p role="status" className="mt-2 text-center text-sm text-muted">
-            Encargo enviado al Director.
-          </p>
-        )}
       </div>
     );
   }
@@ -121,6 +120,40 @@ export default function NuevoEncargo({ agenteId, redes }: Props) {
 
   return (
     <form onSubmit={enviar} className="mt-6 flex flex-col gap-4 rounded-xl border border-line bg-ink/40 p-4" aria-label="Nuevo encargo">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex min-w-48 flex-1 flex-col gap-2">
+          <label htmlFor={idProyecto} className="font-semibold">
+            Proyecto
+          </label>
+          <select
+            id={idProyecto}
+            value={proyectoId}
+            onChange={(e) => setProyectoId(e.target.value)}
+            disabled={ocupado}
+            className="min-h-11 rounded-lg border border-line bg-ink px-3 text-sm text-text outline-none focus:border-accent"
+          >
+            {proyectos.length !== 1 && <option value="">Elige un proyecto…</option>}
+            {proyectos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label
+          className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${urgente ? "border-red-400 bg-red-500/10" : "border-line"}`}
+        >
+          <input
+            type="checkbox"
+            className="size-4 accent-red-500"
+            checked={urgente}
+            disabled={ocupado}
+            onChange={(e) => setUrgente(e.target.checked)}
+          />
+          Urgente
+        </label>
+      </div>
+
       <div className="flex flex-col gap-2">
         <label htmlFor={idTexto} className="font-semibold">
           ¿Qué necesitas?
@@ -136,34 +169,6 @@ export default function NuevoEncargo({ agenteId, redes }: Props) {
           className="w-full resize-y rounded-lg border border-line bg-ink px-3 py-2 text-sm leading-relaxed text-text outline-none focus:border-accent"
         />
       </div>
-
-      {redes.length > 0 && (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 font-semibold">¿Dónde publicar?</legend>
-          <div className="flex flex-wrap gap-2">
-            {redes.map((r) => {
-              const marcada = destinos.includes(r.id);
-              return (
-                <label
-                  key={r.id}
-                  className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm ${marcada ? "border-accent bg-accent/10" : "border-line"}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-[var(--color-accent)]"
-                    checked={marcada}
-                    disabled={ocupado}
-                    onChange={(e) =>
-                      setDestinos((d) => (e.target.checked ? [...d, r.id] : d.filter((x) => x !== r.id)))
-                    }
-                  />
-                  {r.nombre}
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-      )}
 
       <div className="flex flex-col gap-2">
         <span className="font-semibold" id={`${idArchivos}-titulo`}>
@@ -206,15 +211,23 @@ export default function NuevoEncargo({ agenteId, redes }: Props) {
       </div>
 
       <p role="status" aria-live="polite" className="text-sm">
-        {error ? <span className="text-red-400">{error}</span> : progreso ? <span className="text-muted">{progreso}</span> : null}
+        {error ? (
+          <span className="text-red-400">{error}</span>
+        ) : progreso ? (
+          <span className="text-muted">{progreso}</span>
+        ) : enviados > 0 ? (
+          <span className="text-muted">
+            {enviados === 1 ? "Encargo añadido a la cola." : `${enviados} encargos añadidos a la cola.`} Puedes mandar otro.
+          </span>
+        ) : null}
       </p>
 
       <div className="flex gap-2">
         <button type="submit" className="btn-primary flex-1" disabled={ocupado}>
-          {ocupado ? "Enviando…" : "Enviar encargo"}
+          {ocupado ? "Enviando…" : "Añadir a la cola"}
         </button>
         <button type="button" className="btn-secondary" disabled={ocupado} onClick={() => setAbierto(false)}>
-          Cancelar
+          {enviados > 0 ? "Cerrar" : "Cancelar"}
         </button>
       </div>
     </form>

@@ -1,6 +1,6 @@
 export type EstadoPublicacion = "preparando" | "lista" | "publicando" | "publicada" | "error";
 
-/** Un proyecto: se dibuja como un edificio en la ciudad. */
+/** Un proyecto (cliente de la oficina). La tabla sigue llamándose "edificios". */
 export type Edificio = {
   id: string;
   nombre: string;
@@ -15,9 +15,16 @@ export type Edificio = {
   /** Decoración del interior: "campo" (Defensem), "escuela" (CIFA)… */
   estilo?: string;
   orden?: number;
-  /** Ficha del proyecto: qué es, tono y reglas. Solo la leen los agentes de este edificio. */
+  /** Ficha del proyecto: qué es, tono y reglas. La leen los agentes cuando trabajan en un encargo suyo. */
   ficha?: string;
+  /** false = proyecto oculto (migración 0007). */
+  activo?: boolean;
+  /** Cuenta de Instagram del proyecto (más adelante). */
+  instagram?: string | null;
 };
+
+/** Despachos de la oficina (migración 0007). */
+export type Despacho = "direccion" | "redes" | "traduccion";
 
 export type Departamento = {
   id: string;
@@ -28,9 +35,12 @@ export type Departamento = {
 
 export type Agente = {
   id: string;
-  departamento_id: string;
+  /** Restos de la estructura por edificios: los agentes de la oficina ya no tienen departamento. */
+  departamento_id: string | null;
+  /** Despacho de la oficina donde trabaja (migración 0007). */
+  despacho?: Despacho | null;
   nombre: string;
-  tipo: "redes" | "direccion" | "comunicacion" | "administracion" | "rrhh";
+  tipo: "redes" | "direccion" | "comunicacion" | "administracion" | "rrhh" | "traduccion";
   instrucciones: string;
   creado_en: string;
   /** Última vez que se abrió su ficha (migración 0003; puede faltar si aún no se ha ejecutado). */

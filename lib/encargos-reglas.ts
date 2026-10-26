@@ -20,8 +20,11 @@ export function esTipoAdjunto(tipo: string): tipo is TipoAdjunto {
   return tipo in TIPOS_ADJUNTO;
 }
 
-export type EstadoEncargo = "recibido";
+export type EstadoEncargo = "en_cola" | "en_curso" | "terminado" | "cancelado";
 
 export const TEXTO_ESTADO_ENCARGO: Record<EstadoEncargo, string> = {
-  recibido: "Recibido",
+  en_cola: "En cola",
+  en_curso: "En curso",
+  terminado: "Terminado",
+  cancelado: "Cancelado",
 };

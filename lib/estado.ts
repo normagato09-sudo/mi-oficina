@@ -19,6 +19,8 @@ export type EstadoAgente = {
  */
 export function estadoAgente(
   agente: { estados: Record<EstadoPublicacion, number>; sinVer: number; activo?: boolean; aviso_ia?: string | null },
+  /** Encargos esperando en su cola (Director): si no hay nada más urgente, dice "X en cola". */
+  enCola = 0,
 ): EstadoAgente {
   const { estados, sinVer } = agente;
   if (agente.activo === false) return { luz: "apagada", texto: "Próximamente", trabajando: false, inactivo: true };
@@ -30,6 +32,7 @@ export function estadoAgente(
   if (estados.preparando > 0) return { ...base, luz: "amarillo", texto: "Preparando…" };
   if (estados.publicando > 0) return { ...base, luz: "amarillo", texto: "Publicando…" };
   if (sinVer > 0) return { ...base, luz: "verde", texto: "¡Terminado!" };
+  if (enCola > 0) return { ...base, luz: "apagada", texto: `${enCola} en cola` };
   return { ...base, luz: "apagada", texto: "Libre" };
 }
 

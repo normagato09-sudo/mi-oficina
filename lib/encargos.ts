@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { extractText, getDocumentProxy } from "unpdf";
 import { supabase } from "./supabase";
 import { MAX_ADJUNTOS, MAX_BYTES_ADJUNTO, MAX_CARACTERES_ENCARGO, TIPOS_ADJUNTO, esTipoAdjunto, type EstadoEncargo } from "./encargos-reglas";
-import type { Agente } from "./tipos";
+import type { Agente, Edificio } from "./tipos";
 
 export const BUCKET_ENCARGOS = "encargos";
 
@@ -14,20 +14,25 @@ export type Adjunto = AdjuntoImagen | AdjuntoPdf;
 
 export type Encargo = {
   id: string;
+  /** Proyecto del encargo (tabla edificios). */
   edificio_id: string;
   director_id: string;
   texto: string;
   destinos: string[];
   adjuntos: Adjunto[];
   estado: EstadoEncargo;
+  /** Los urgentes van primero en la cola (migración 0007). */
+  urgente: boolean;
+  /** Orden dentro de la cola: menor = antes (migración 0007). */
+  orden: number;
   creado_en: string;
   actualizado_en: string;
 };
 
-/** Encargo listo para mostrar: imágenes con URL firmada y destinos con nombre. */
+/** Encargo listo para mostrar: imágenes con URL firmada y el proyecto con nombre y color. */
 export type EncargoVista = Omit<Encargo, "adjuntos"> & {
   adjuntos: ((AdjuntoImagen & { url: string | null }) | (Omit<AdjuntoPdf, "texto"> & { caracteres: number }))[];
-  nombresDestinos: string[];
+  proyecto: { nombre: string; color: string };
 };
 
 /* ───────────── Imágenes y PDF ───────────── */
@@ -107,20 +112,21 @@ export async function prepararSubidas(archivos: ArchivoPedido[]): Promise<Subida
   );
 }
 
-/* ───────────── Crear y leer encargos ───────────── */
+/* ───────────── Crear encargos ───────────── */
 
 export type NuevoEncargo = {
-  director: Agente & { edificio_id: string };
+  director: Agente;
+  proyectoId: string;
   texto: string;
-  destinos: string[];
+  urgente: boolean;
   subidas: { ruta: string; nombre: string; tipo: string }[];
 };
 
 /**
- * Guarda un encargo en estado "recibido": convierte las imágenes, extrae el texto de los PDF
- * y borra los originales subidos.
+ * Guarda un encargo al final de la cola del Director ("en_cola"): convierte las imágenes,
+ * extrae el texto de los PDF y borra los originales subidos.
  */
-export async function crearEncargo({ director, texto, destinos, subidas }: NuevoEncargo): Promise<string> {
+export async function crearEncargo({ director, proyectoId, texto, urgente, subidas }: NuevoEncargo): Promise<string> {
   const textoLimpio = texto.replace(/\r\n/g, "\n").trim();
   if (!textoLimpio && !subidas.length) throw new Error("Escribe el encargo o adjunta algún archivo.");
   if (textoLimpio.length > MAX_CARACTERES_ENCARGO) throw new Error(`Máximo ${MAX_CARACTERES_ENCARGO.toLocaleString("es-ES")} caracteres.`);
@@ -151,7 +157,7 @@ export async function crearEncargo({ director, texto, destinos, subidas }: Nuevo
         const { jpeg, ancho, alto } = await procesarImagen(original).catch(() => {
           throw new Error(`No se pudo leer la imagen "${subida.nombre}".`);
         });
-        const ruta = `${director.edificio_id}/${id}/${++n}.jpg`;
+        const ruta = `${proyectoId}/${id}/${++n}.jpg`;
         const { error: e2 } = await almacen.upload(ruta, jpeg, { contentType: "image/jpeg" });
         if (e2) throw new Error(`No se pudo guardar "${subida.nombre}": ${e2.message}`);
         guardadas.push(ruta);
@@ -159,14 +165,15 @@ export async function crearEncargo({ director, texto, destinos, subidas }: Nuevo
       }
     }
 
+    // El orden lo pone la base de datos: al final de la cola.
     const { error } = await db.from("encargos").insert({
       id,
-      edificio_id: director.edificio_id,
+      edificio_id: proyectoId,
       director_id: director.id,
       texto: textoLimpio,
-      destinos,
       adjuntos,
-      estado: "recibido" satisfies EstadoEncargo,
+      urgente,
+      estado: "en_cola" satisfies EstadoEncargo,
     });
     if (error) throw new Error(`No se pudo guardar el encargo: ${error.message}`);
   } catch (e) {
@@ -179,26 +186,24 @@ export async function crearEncargo({ director, texto, destinos, subidas }: Nuevo
   return id;
 }
 
-/** Historial de encargos de un Director, del más reciente al más antiguo. */
-export async function cargarEncargos(directorId: string, nombres: Map<string, string>, limite = 30): Promise<EncargoVista[]> {
-  const db = supabase();
-  const { data, error } = await db
-    .from("encargos")
-    .select("*")
-    .eq("director_id", directorId)
-    .order("creado_en", { ascending: false })
-    .limit(limite)
-    .returns<Encargo[]>();
-  if (error) throw new Error(`No se pudieron leer los encargos: ${error.message}`);
-  const encargos = data ?? [];
+/* ───────────── Leer la cola ───────────── */
 
-  // Miniaturas: URLs firmadas (el bucket es privado), válidas una hora.
+/** Firma las miniaturas y pone nombre y color al proyecto de cada encargo. */
+async function paraMostrar(encargos: Encargo[]): Promise<EncargoVista[]> {
+  const db = supabase();
   const rutas = encargos.flatMap((e) => e.adjuntos.flatMap((a) => (a.tipo === "imagen" ? [a.ruta] : [])));
+  const idsProyecto = [...new Set(encargos.map((e) => e.edificio_id))];
+
   const urls = new Map<string, string>();
   if (rutas.length) {
+    // Miniaturas: URLs firmadas (el bucket es privado), válidas una hora.
     const { data: firmadas } = await db.storage.from(BUCKET_ENCARGOS).createSignedUrls(rutas, 3600);
     for (const f of firmadas ?? []) if (f.path && f.signedUrl) urls.set(f.path, f.signedUrl);
   }
+  const { data: proyectos } = idsProyecto.length
+    ? await db.from("edificios").select("id, nombre, color").in("id", idsProyecto).returns<Pick<Edificio, "id" | "nombre" | "color">[]>()
+    : { data: [] };
+  const porId = new Map((proyectos ?? []).map((p) => [p.id, p]));
 
   return encargos.map((e) => ({
     ...e,
@@ -207,38 +212,93 @@ export async function cargarEncargos(directorId: string, nombres: Map<string, st
         ? { ...a, url: urls.get(a.ruta) ?? null }
         : { tipo: "pdf" as const, nombre: a.nombre, paginas: a.paginas, caracteres: a.texto.length },
     ),
-    nombresDestinos: e.destinos.map((d) => nombres.get(d) ?? "Agente"),
+    proyecto: { nombre: porId.get(e.edificio_id)?.nombre ?? "Proyecto", color: porId.get(e.edificio_id)?.color ?? "#8a93ad" },
   }));
 }
 
-/**
- * El Director de un edificio y los agentes de redes activos a los que puede mandar publicar.
- * Devuelve null si el agente no existe o no es un Director.
- */
-export async function cargarDirector(agenteId: string): Promise<{
-  director: Agente & { edificio_id: string };
-  redes: { id: string; nombre: string }[];
-} | null> {
-  const db = supabase();
-  const { data: director } = await db
+/** La cola del Director en el orden en que se atenderá: urgentes primero y después por orden. */
+export async function cargarCola(): Promise<EncargoVista[]> {
+  const { data, error } = await supabase()
+    .from("encargos")
+    .select("*")
+    .eq("estado", "en_cola")
+    .order("urgente", { ascending: false })
+    .order("orden")
+    .order("id")
+    .returns<Encargo[]>();
+  if (error) throw new Error(`No se pudo leer la cola: ${error.message}. ¿Has ejecutado la migración 0007?`);
+  return paraMostrar(data ?? []);
+}
+
+/** Encargos que ya han salido de la cola (en curso, terminados o cancelados), del más reciente al más antiguo. */
+export async function cargarHistorial(limite = 20): Promise<EncargoVista[]> {
+  const { data, error } = await supabase()
+    .from("encargos")
+    .select("*")
+    .neq("estado", "en_cola")
+    .order("actualizado_en", { ascending: false })
+    .limit(limite)
+    .returns<Encargo[]>();
+  if (error) throw new Error(`No se pudieron leer los encargos: ${error.message}`);
+  return paraMostrar(data ?? []);
+}
+
+/** Cuántos encargos hay en cola y de qué proyecto es el primero (para la mesa del Director). */
+export async function resumenCola(): Promise<{ total: number; primerProyecto: string | null }> {
+  const { data, count, error } = await supabase()
+    .from("encargos")
+    .select("edificio_id", { count: "exact" })
+    .eq("estado", "en_cola")
+    .order("urgente", { ascending: false })
+    .order("orden")
+    .order("id")
+    .limit(1)
+    .returns<{ edificio_id: string }[]>();
+  // Sin la migración 0007 no hay cola: la oficina se ve igual, con la bandeja vacía.
+  if (error) return { total: 0, primerProyecto: null };
+  return { total: count ?? 0, primerProyecto: data?.[0]?.edificio_id ?? null };
+}
+
+/* ───────────── Cambiar la cola (solo encargos que aún no han empezado) ───────────── */
+
+/** Sube o baja un encargo un puesto, dentro de su grupo (urgentes o normales). */
+export async function moverEncargo(id: string, arriba: boolean): Promise<void> {
+  const { data, error } = await supabase().rpc("mover_encargo", { p_id: id, p_arriba: arriba });
+  if (error) throw new Error(`No se pudo cambiar el orden: ${error.message}`);
+  if (data !== true) throw new Error("No se puede mover más.");
+}
+
+export async function marcarUrgente(id: string, urgente: boolean): Promise<void> {
+  const { data, error } = await supabase()
+    .from("encargos")
+    .update({ urgente })
+    .eq("id", id)
+    .eq("estado", "en_cola")
+    .select("id");
+  if (error) throw new Error(`No se pudo cambiar la urgencia: ${error.message}`);
+  if (!data?.length) throw new Error("Este encargo ya no está en la cola.");
+}
+
+/** Cancela un encargo que aún no ha empezado. No se borra: queda en el historial. */
+export async function cancelarEncargo(id: string): Promise<void> {
+  const { data, error } = await supabase()
+    .from("encargos")
+    .update({ estado: "cancelado" satisfies EstadoEncargo })
+    .eq("id", id)
+    .eq("estado", "en_cola")
+    .select("id");
+  if (error) throw new Error(`No se pudo cancelar: ${error.message}`);
+  if (!data?.length) throw new Error("Este encargo ya ha empezado o ya no está en la cola.");
+}
+
+/** El Director de la oficina (activo y en su despacho), o null si `agenteId` no lo es. */
+export async function cargarDirector(agenteId: string): Promise<Agente | null> {
+  const { data } = await supabase()
     .from("agentes")
-    .select("*, departamentos!inner(edificio_id)")
+    .select("*")
     .eq("id", agenteId)
     .eq("tipo", "direccion")
-    .maybeSingle<Agente & { departamentos: { edificio_id: string } }>();
-  if (!director) return null;
-  const { departamentos, ...resto } = director;
-
-  const { data: redes } = await db
-    .from("agentes")
-    .select("id, nombre, activo, departamentos!inner(edificio_id)")
-    .eq("tipo", "redes")
-    .eq("departamentos.edificio_id", departamentos.edificio_id)
-    .order("creado_en")
-    .returns<{ id: string; nombre: string; activo?: boolean }[]>();
-
-  return {
-    director: { ...resto, edificio_id: departamentos.edificio_id },
-    redes: (redes ?? []).filter((r) => r.activo !== false).map((r) => ({ id: r.id, nombre: r.nombre })),
-  };
+    .eq("despacho", "direccion")
+    .maybeSingle<Agente>();
+  return data && data.activo !== false ? data : null;
 }
