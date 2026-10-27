@@ -3,13 +3,14 @@ import Header from "@/components/Header";
 import Oficina, { estiloAgente, letreroDe } from "@/components/oficina/Oficina";
 import FichaAgente from "@/components/ficha/FichaAgente";
 import PanelProyecto from "@/components/panel/PanelProyecto";
+import PanelProyectos from "@/components/panel/PanelProyectos";
 import NuevoEncargo from "@/components/encargos/NuevoEncargo";
 import ColaDirector from "@/components/encargos/ColaDirector";
 import HistorialEncargos from "@/components/encargos/HistorialEncargos";
 import { cargarCola, cargarHistorial, resumenCola, type EncargoVista } from "@/lib/encargos";
-import { cargarAvisos, cargarOficina, marcarVisto, type DatosOficina } from "@/lib/datos";
+import { cargarAvisos, cargarOficina, cargarTodosLosProyectos, marcarVisto, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
-import type { Aviso } from "@/lib/tipos";
+import type { Aviso, Edificio } from "@/lib/tipos";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   await connection();
@@ -48,11 +49,18 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     agente.sinVer = 0;
   }
 
-  // Carpetas de la estantería del Director: la ficha de un proyecto o los perfiles del equipo.
+  // Paneles: "Proyectos" (botón de la cabecera) o la carpeta "Equipo" de la estantería del Director.
   const panel = agente ? undefined : params.panel;
-  const proyectoPanel =
-    panel === "proyecto" ? datos.proyectos.find((p) => p.id === params.proyecto) : undefined;
-  const carpetaAbierta = proyectoPanel ? proyectoPanel.id : panel === "equipo" ? "equipo" : undefined;
+  const equipoAbierto = panel === "equipo";
+  let todosLosProyectos: Edificio[] | undefined;
+  let errorProyectos: string | null = null;
+  if (panel === "proyectos") {
+    try {
+      todosLosProyectos = await cargarTodosLosProyectos();
+    } catch (e) {
+      errorProyectos = e instanceof Error ? e.message : String(e);
+    }
+  }
 
   const esDirector = agente !== undefined && agente.id === director?.id;
   let colaDirector: EncargoVista[] = [];
@@ -69,7 +77,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   return (
     <>
-      <Header directorId={director?.id} avisos={avisos} />
+      <Header directorId={director?.id} avisos={avisos} proyectosAbierto={panel === "proyectos"} />
       <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-6 py-6">
         <main className="min-w-0 flex-1">
           <h1 className="font-display text-3xl font-extrabold tracking-tight">Mi Oficina</h1>
@@ -83,13 +91,23 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               enCola={cola.total}
               proyectoCartel={proyectoCartel}
               agenteSeleccionado={agente?.id}
-              carpetaAbierta={carpetaAbierta}
+              equipoAbierto={equipoAbierto}
             />
           </div>
         </main>
 
-        {proyectoPanel && <PanelProyecto tipo="proyecto" proyecto={proyectoPanel} />}
-        {carpetaAbierta === "equipo" && <PanelProyecto tipo="equipo" agentes={datos.agentes} />}
+        {todosLosProyectos && (
+          <PanelProyectos
+            proyectos={todosLosProyectos}
+            seleccionado={typeof params.proyecto === "string" ? params.proyecto : undefined}
+          />
+        )}
+        {errorProyectos && (
+          <p role="alert" className="w-[460px] shrink-0 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
+            {errorProyectos}
+          </p>
+        )}
+        {equipoAbierto && <PanelProyecto agentes={datos.agentes} />}
 
         {agente && (
           <FichaAgente

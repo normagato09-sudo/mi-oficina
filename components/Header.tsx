@@ -8,9 +8,11 @@ type Props = {
   /** El Director: "+ Nuevo encargo" abre su formulario. */
   directorId?: string;
   avisos?: Aviso[];
+  /** El panel "Proyectos" está abierto: el botón lo cierra. */
+  proyectosAbierto?: boolean;
 };
 
-export default function Header({ directorId, avisos = [] }: Props) {
+export default function Header({ directorId, avisos = [], proyectosAbierto = false }: Props) {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-ink/95 backdrop-blur">
       <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-6 py-3">
@@ -20,6 +22,15 @@ export default function Header({ directorId, avisos = [] }: Props) {
         </Link>
 
         <div className="flex-1" />
+
+        <Link
+          href={proyectosAbierto ? "/" : "/?panel=proyectos"}
+          scroll={false}
+          aria-current={proyectosAbierto ? "true" : undefined}
+          className="btn-secondary"
+        >
+          Proyectos
+        </Link>
 
         {directorId && (
           <Link href={`/?agente=${directorId}&nuevo=1`} scroll={false} className="btn-primary">

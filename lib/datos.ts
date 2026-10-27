@@ -2,6 +2,7 @@ import "server-only";
 import { LimiteIAError } from "./ia";
 import { supabase } from "./supabase";
 import type { Agente, Aviso, Despacho, Edificio, EstadoPublicacion, Publicacion } from "./tipos";
+import type { IdiomaProyecto } from "./idiomas";
 
 export type AgenteConEstado = Agente & {
   despacho: Despacho;
@@ -35,11 +36,55 @@ function contarEstados(filas: { estado: EstadoPublicacion }[]): Record<EstadoPub
   return estados;
 }
 
-/** Proyectos activos, en su orden. */
-export async function cargarProyectos(): Promise<Edificio[]> {
+/** Todos los proyectos (también los archivados), en su orden. */
+export async function cargarTodosLosProyectos(): Promise<Edificio[]> {
   const { data, error } = await supabase().from("edificios").select("*").order("creado_en").returns<Edificio[]>();
   if (error) throw new Error(`No se pudieron leer los proyectos: ${error.message}`);
-  return (data ?? []).filter((p) => p.activo !== false).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+  return (data ?? []).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+}
+
+/** Proyectos activos, en su orden. */
+export async function cargarProyectos(): Promise<Edificio[]> {
+  return (await cargarTodosLosProyectos()).filter((p) => p.activo !== false);
+}
+
+export type DatosProyecto = {
+  nombre: string;
+  color: string;
+  idioma: IdiomaProyecto;
+  ficha: string;
+  /** Usuario de Instagram sin "@", o null. */
+  instagram: string | null;
+};
+
+/** Crea un proyecto (activo, al final) o guarda los cambios de uno existente. Devuelve su id. */
+export async function guardarProyecto(id: string | null, datos: DatosProyecto): Promise<string> {
+  const db = supabase();
+  if (!id) {
+    const proyectos = await cargarTodosLosProyectos();
+    const orden = Math.max(0, ...proyectos.map((p) => p.orden ?? 0)) + 1;
+    const { data, error } = await db
+      .from("edificios")
+      .insert({ ...datos, activo: true, orden })
+      .select("id")
+      .single<{ id: string }>();
+    if (error) throw new Error(`No se pudo crear el proyecto: ${error.message}`);
+    return data.id;
+  }
+
+  const { data: antes, error: e1 } = await db.from("edificios").select("nombre").eq("id", id).single<{ nombre: string }>();
+  if (e1) throw new Error(`No se encontró el proyecto: ${e1.message}`);
+  // Si cambia el nombre, el cartel pasa a mostrar el nombre nuevo.
+  const letrero = antes.nombre !== datos.nombre ? { letrero: null, letrero_secundario: null } : {};
+  const { error } = await db.from("edificios").update({ ...datos, ...letrero }).eq("id", id);
+  if (error) throw new Error(`No se pudo guardar el proyecto: ${error.message}`);
+  return id;
+}
+
+/** Archiva (activo = false) o vuelve a activar un proyecto. Nunca se borra. */
+export async function activarProyecto(id: string, activo: boolean): Promise<void> {
+  const { error } = await supabase().from("edificios").update({ activo }).eq("id", id);
+  if (error) throw new Error(`No se pudo ${activo ? "activar" : "archivar"} el proyecto: ${error.message}`);
 }
 
 /** La oficina: los proyectos activos y el equipo con el recuento de estados de cada agente. */

@@ -36,8 +36,8 @@ type Props = {
   /** Proyecto cuyo cartel cuelga en Dirección (el del primer encargo de la cola, o el primero). */
   proyectoCartel?: Edificio;
   agenteSeleccionado?: string;
-  /** Carpeta abierta de la estantería: id de proyecto o "equipo". */
-  carpetaAbierta?: string;
+  /** La carpeta "Equipo" de la estantería está abierta. */
+  equipoAbierto?: boolean;
 };
 
 /** Texto y colores del cartel de un proyecto. */
@@ -167,37 +167,27 @@ function DespachoSala({ despacho, agentes, children }: { despacho: Despacho; age
   );
 }
 
-/** Estantería del Director: una carpeta por proyecto (abre su ficha) y la del equipo (perfiles). */
-function EstanteriaCarpetas({ proyectos, abierta }: { proyectos: Edificio[]; abierta?: string }) {
-  const carpetas = [
-    ...proyectos.map((p) => ({ id: p.id, nombre: p.nombre, etiqueta: letreroDe(p).principal, color: p.color, href: `/?panel=proyecto&proyecto=${p.id}` })),
-    { id: "equipo", nombre: "Equipo", etiqueta: "EQUIPO", color: "#5b6378", href: "/?panel=equipo" },
-  ];
+/** Estantería del Director: la carpeta del equipo (perfiles). Los proyectos se gestionan desde la cabecera. */
+function EstanteriaCarpetas({ abierta }: { abierta?: boolean }) {
   return (
     <div className="estanteria-carpetas" style={{ left: 22, top: 10 }}>
       <div className="balda balda-carpetas">
-        {carpetas.map((c) => {
-          const abiertaAhora = abierta === c.id;
-          return (
-            <Link
-              key={c.id}
-              href={abiertaAhora ? "/" : c.href}
-              scroll={false}
-              prefetch={false}
-              aria-current={abiertaAhora ? "true" : undefined}
-              aria-label={`${abiertaAhora ? "Cerrar" : "Abrir"} la carpeta ${c.id === "equipo" ? "del equipo (perfiles de los agentes)" : `del proyecto ${c.nombre} (su ficha)`}`}
-              className="carpeta"
-              style={{ "--carpeta": c.color } as CSSProperties}
-            >
-              <span className="lomo" aria-hidden="true">
-                {c.etiqueta}
-              </span>
-              <span className="carpeta-pista" aria-hidden="true">
-                {c.id === "equipo" ? "Perfiles del equipo" : `Ficha de ${c.nombre}`}
-              </span>
-            </Link>
-          );
-        })}
+        <Link
+          href={abierta ? "/" : "/?panel=equipo"}
+          scroll={false}
+          prefetch={false}
+          aria-current={abierta ? "true" : undefined}
+          aria-label={`${abierta ? "Cerrar" : "Abrir"} la carpeta del equipo (perfiles de los agentes)`}
+          className="carpeta"
+          style={{ "--carpeta": "#5b6378" } as CSSProperties}
+        >
+          <span className="lomo" aria-hidden="true">
+            EQUIPO
+          </span>
+          <span className="carpeta-pista" aria-hidden="true">
+            Perfiles del equipo
+          </span>
+        </Link>
       </div>
       <div className="balda" aria-hidden="true">
         {["#c0392b", "#2f6db5", "#e0b23a", "#3c8d5a", "#8e5aa8", "#e07b39", "#34495e", "#d35d6e"].map((color, i) => (
@@ -221,7 +211,7 @@ function decoracion(despacho: Despacho, props: Props): ReactNode {
       const cartel = props.proyectoCartel;
       return (
         <>
-          <EstanteriaCarpetas proyectos={props.datos.proyectos} abierta={props.carpetaAbierta} />
+          <EstanteriaCarpetas abierta={props.equipoAbierto} />
           <Ventana x={190} y={14} ancho={150} alto={96} />
           {cartel && <CuadroNombre x={356} y={20} {...letreroDe(cartel)} />}
           <Reloj x={486} y={30} />
