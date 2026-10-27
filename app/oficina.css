@@ -1,10 +1,13 @@
 /* ═════════════ La oficina: una planta con despachos, vista desde arriba ═════════════ */
 
-/* ───────────── Lienzo: planta de 1200 px escalada al ancho disponible ───────────── */
+/* ───────────── Lienzo: planta de tamaño fijo escalada para caber entera en la ventana ───────────── */
 
 .escena {
   position: relative;
   width: 100%;
+  /* Cabe entera en la ventana (Lienzo fija ancho y alto) y, si sobra sitio, queda centrada */
+  max-width: 100%;
+  margin-inline: auto;
   overflow: hidden;
   border-radius: 1rem;
   border: 1px solid var(--color-line);
@@ -1814,12 +1817,17 @@
   align-items: center;
   gap: 9px;
   padding: 9px 16px;
-  white-space: nowrap;
-  border-radius: 999px;
+  /* Si con la letra mínima no cabe en el despacho, pasa a dos líneas en vez de salirse */
+  width: max-content;
+  max-width: 244px;
+  border-radius: 20px;
   background: #ffffff;
   color: #1b2136;
-  font-size: 16.5px;
+  /* Nunca menos de 12 px reales, aunque la planta se vea pequeña */
+  font-size: max(16.5px, calc(12px / var(--escala, 1)));
   font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
   z-index: 8;
 }
@@ -1840,7 +1848,7 @@
   transform: none;
   white-space: normal;
   border-radius: 14px;
-  font-size: 14.5px;
+  font-size: max(14.5px, calc(12px / var(--escala, 1)));
   line-height: 1.25;
 }
 .burbuja-larga::after {

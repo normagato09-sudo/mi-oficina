@@ -121,14 +121,16 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       {/* Mientras el Director trabaja (o hay cola que puede empezar), la página se refresca sola. */}
       <AutoRefresco activo={datos.hayEnCurso || (cola.total > 0 && !director?.reparto?.error)} />
       <Header directorId={director?.id} avisos={avisos} proyectosAbierto={panel === "proyectos"} />
-      <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-6 py-6">
+      <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-6 py-4">
         <main className="min-w-0 flex-1">
-          <h1 className="font-display text-3xl font-extrabold tracking-tight">Mi Oficina</h1>
-          <p className="mt-1 text-muted">
-            {plural(datos.agentes.length, "agente", "agentes")} · trabajando para{" "}
-            {datos.proyectos.length === 1 ? datos.proyectos[0]!.nombre : plural(datos.proyectos.length, "proyecto", "proyectos")}
-          </p>
-          <div className="mt-6">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <h1 className="font-display text-xl font-extrabold tracking-tight">Mi Oficina</h1>
+            <p className="text-sm text-muted">
+              {plural(datos.agentes.length, "agente", "agentes")} · trabajando para{" "}
+              {datos.proyectos.length === 1 ? datos.proyectos[0]!.nombre : plural(datos.proyectos.length, "proyecto", "proyectos")}
+            </p>
+          </div>
+          <div className="mt-3">
             <Oficina
               datos={datos}
               enCola={cola.total}
