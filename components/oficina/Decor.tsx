@@ -80,7 +80,8 @@ export function Cuadro({ x, y, tipo = "paisaje", ancho = 64, alto = 48 }: Pos & 
 export function CuadroNombre({ x, y, principal, secundario, color, colorSecundario }: Pos & { principal: string; secundario: string | null; color: string; colorSecundario: string }) {
   return (
     <Pieza x={x} y={y} className="cuadro-nombre">
-      <span className="marca" style={{ color }}>
+      {/* Los nombres largos (p. ej. "MI OFICINA") van con letra más pequeña para caber en el cuadro */}
+      <span className="marca" style={{ color, ...(principal.length > 6 ? { fontSize: Math.max(10, Math.floor(150 / principal.length)), letterSpacing: "0.02em" } : {}) }}>
         {principal}
       </span>
       {secundario && (

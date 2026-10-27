@@ -259,6 +259,19 @@ export async function resumenCola(): Promise<{ total: number; primerProyecto: st
   return { total: count ?? 0, primerProyecto: data?.[0]?.edificio_id ?? null };
 }
 
+/** Proyecto del encargo que el Director tiene en curso (el que empezó antes), o null si no hay ninguno. */
+export async function proyectoEnCurso(): Promise<string | null> {
+  const { data, error } = await supabase()
+    .from("encargos")
+    .select("edificio_id")
+    .eq("estado", "en_curso")
+    .order("actualizado_en")
+    .limit(1)
+    .returns<{ edificio_id: string }[]>();
+  if (error) return null;
+  return data?.[0]?.edificio_id ?? null;
+}
+
 /* ───────────── Cambiar la cola (solo encargos que aún no han empezado) ───────────── */
 
 /** Sube o baja un encargo un puesto, dentro de su grupo (urgentes o normales). */

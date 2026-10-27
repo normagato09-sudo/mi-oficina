@@ -8,7 +8,7 @@ import NuevoEncargo from "@/components/encargos/NuevoEncargo";
 import ColaDirector from "@/components/encargos/ColaDirector";
 import HistorialEncargos from "@/components/encargos/HistorialEncargos";
 import PlantillasCartel, { type FotoEncargo } from "@/components/carteles/PlantillasCartel";
-import { cargarCola, cargarHistorial, resumenCola, type EncargoVista } from "@/lib/encargos";
+import { cargarCola, cargarHistorial, proyectoEnCurso, resumenCola, type EncargoVista } from "@/lib/encargos";
 import { cargarAvisos, cargarOficina, cargarTodosLosProyectos, marcarVisto, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
 import type { Aviso, Edificio } from "@/lib/tipos";
@@ -36,12 +36,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   }
 
   const director = datos.agentes.find((a) => a.despacho === "direccion" && a.tipo === "direccion");
-  const [cola, avisos] = await Promise.all([
+  const [cola, enCurso, avisos] = await Promise.all([
     resumenCola(),
+    proyectoEnCurso(),
     cargarAvisos().catch((): Aviso[] => []),
   ]);
-  // El cartel de Dirección es el del proyecto del primer encargo de la cola (o el del primer proyecto).
-  const proyectoCartel = datos.proyectos.find((p) => p.id === cola.primerProyecto) ?? datos.proyectos[0];
+  // El cartel de Dirección: el proyecto del encargo en curso o, si no hay ninguno, "MI OFICINA".
+  const proyectoCartel = datos.proyectos.find((p) => p.id === enCurso);
 
   const agente = datos.agentes.find((a) => a.id === agenteId);
   if (agente) {

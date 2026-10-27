@@ -187,7 +187,7 @@
 /* En despachos estrechos los avisos largos se centran para no salirse */
 .despacho .burbuja-larga {
   left: 50%;
-  width: 250px;
+  width: 270px;
   transform: translateX(-50%);
 }
 .despacho .burbuja-larga::after {
@@ -804,7 +804,7 @@
   font-weight: 800;
   line-height: 1;
 }
-.cuadro-nombre .marca { font-size: 18px; letter-spacing: 0.03em; }
+.cuadro-nombre .marca { font-size: 18px; letter-spacing: 0.03em; max-width: 100%; overflow: hidden; white-space: nowrap; }
 .cuadro-nombre .marca:has(+ .franja) { font-size: 24px; letter-spacing: 0.08em; }
 .cuadro-nombre .sub { font-size: 9px; letter-spacing: 0.1em; }
 .cuadro-nombre .franja {
@@ -1812,14 +1812,14 @@
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 13px;
+  gap: 9px;
+  padding: 9px 16px;
   white-space: nowrap;
   border-radius: 999px;
   background: #ffffff;
   color: #1b2136;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16.5px;
+  font-weight: 700;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
   z-index: 8;
 }
@@ -1828,7 +1828,7 @@
   position: absolute;
   left: 50%;
   top: 100%;
-  border: 7px solid transparent;
+  border: 8px solid transparent;
   border-top-color: #ffffff;
   transform: translateX(-50%);
 }
@@ -1836,11 +1836,11 @@
 .burbuja-larga {
   left: calc(50% - 26px);
   z-index: 9;
-  width: 300px;
+  width: 330px;
   transform: none;
   white-space: normal;
   border-radius: 14px;
-  font-size: 12.5px;
+  font-size: 14.5px;
   line-height: 1.25;
 }
 .burbuja-larga::after {
@@ -1848,8 +1848,8 @@
 }
 .burbuja .punto {
   flex-shrink: 0;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }

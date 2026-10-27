@@ -59,7 +59,7 @@ type Props = {
   datos: DatosOficina;
   /** Encargos en la cola del Director. */
   enCola: number;
-  /** Proyecto cuyo cartel cuelga en Dirección (el del primer encargo de la cola, o el primero). */
+  /** Proyecto del encargo en curso: su cartel cuelga en Dirección (sin él, "MI OFICINA"). */
   proyectoCartel?: Edificio;
   agenteSeleccionado?: string;
   /** La carpeta "Equipo" de la estantería está abierta. */
@@ -75,6 +75,9 @@ export function letreroDe(edificio: Edificio) {
     colorSecundario: edificio.color_secundario || edificio.color,
   };
 }
+
+/** Cartel de Dirección cuando no hay ningún encargo en curso. */
+const CARTEL_OFICINA = { principal: "MI OFICINA", secundario: null, color: "#2c3e66", colorSecundario: "#F5B841" };
 
 /** Aspecto de cada agente: uno distinto por despacho. */
 const ASPECTOS: Record<Despacho, Aspecto> = {
@@ -281,7 +284,7 @@ function decoracion(despacho: Despacho, props: Props): ReactNode {
         <>
           <EstanteriaEquipo abierta={props.equipoAbierto === true} />
           <Ventana x={196} y={14} ancho={112} alto={96} />
-          {props.proyectoCartel && <CuadroNombre x={320} y={20} {...letreroDe(props.proyectoCartel)} />}
+          <CuadroNombre x={320} y={20} {...(props.proyectoCartel ? letreroDe(props.proyectoCartel) : CARTEL_OFICINA)} />
           <LamparaColgante x={252} cable={10} />
           <AlfombraPlanta x={63} y={222} ancho={320} alto={124} tipo="persa" />
           <Planta x={378} y={150} tipo="ficus" />
