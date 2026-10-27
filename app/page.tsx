@@ -7,6 +7,7 @@ import PanelProyectos from "@/components/panel/PanelProyectos";
 import NuevoEncargo from "@/components/encargos/NuevoEncargo";
 import ColaDirector from "@/components/encargos/ColaDirector";
 import HistorialEncargos from "@/components/encargos/HistorialEncargos";
+import PlantillasCartel, { type FotoEncargo } from "@/components/carteles/PlantillasCartel";
 import { cargarCola, cargarHistorial, resumenCola, type EncargoVista } from "@/lib/encargos";
 import { cargarAvisos, cargarOficina, cargarTodosLosProyectos, marcarVisto, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
@@ -73,6 +74,14 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       errorCola = e instanceof Error ? e.message : String(e);
     }
   }
+  // El Diseñador puede usar en sus plantillas las fotos adjuntas a los encargos.
+  let fotosEncargos: FotoEncargo[] = [];
+  if (agente?.despacho === "diseno") {
+    const encargos = await Promise.all([cargarCola(), cargarHistorial()]).then((r) => r.flat()).catch((): EncargoVista[] => []);
+    fotosEncargos = encargos.flatMap((e) =>
+      e.adjuntos.flatMap((a) => (a.tipo === "imagen" && a.url ? [{ url: a.url, nombre: a.nombre, proyecto: e.proyecto.nombre }] : [])),
+    );
+  }
   const corbata = proyectoCartel ? letreroDe(proyectoCartel).colorSecundario : "#F5B841";
 
   return (
@@ -135,14 +144,25 @@ export default async function Home({ searchParams }: PageProps<"/">) {
                 )}
               </>
             ) : (
-              <section aria-labelledby="trabajos-titulo" className="mt-8">
-                <h3 id="trabajos-titulo" className="font-display text-lg font-extrabold">
-                  {agente.despacho === "traduccion" ? "Traducciones" : "Publicaciones"}
-                </h3>
-                <p className="mt-3 rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
-                  Todavía no tiene trabajos. Le llegarán del Director cuando reparta los encargos.
-                </p>
-              </section>
+              <>
+                {agente.despacho === "diseno" && (
+                  <PlantillasCartel
+                    proyectos={datos.proyectos.map((p) => {
+                      const l = letreroDe(p);
+                      return { id: p.id, nombre: l.principal, secundario: l.secundario, color: l.color, colorSecundario: l.colorSecundario };
+                    })}
+                    fotos={fotosEncargos}
+                  />
+                )}
+                <section aria-labelledby="trabajos-titulo" className="mt-8">
+                  <h3 id="trabajos-titulo" className="font-display text-lg font-extrabold">
+                    {agente.despacho === "traduccion" ? "Traducciones" : "Publicaciones"}
+                  </h3>
+                  <p className="mt-3 rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
+                    Todavía no tiene trabajos. Le llegarán del Director cuando reparta los encargos.
+                  </p>
+                </section>
+              </>
             )}
           </FichaAgente>
         )}
