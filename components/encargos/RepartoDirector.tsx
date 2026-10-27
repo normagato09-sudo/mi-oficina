@@ -3,7 +3,7 @@
 import { useId, useState, useTransition } from "react";
 import { reanudarEncargoAccion, responderEncargo } from "@/app/actions/encargos";
 import type { EncargoVista } from "@/lib/encargos";
-import { MAX_CARACTERES_ENCARGO } from "@/lib/encargos-reglas";
+import { MAX_CARACTERES_ENCARGO, TEXTO_ESTADO_TAREA } from "@/lib/encargos-reglas";
 
 type Props = {
   /** Encargos en curso, en error o esperando mi respuesta (con `atascado` si lleva demasiado sin avanzar). */
@@ -68,11 +68,30 @@ export default function RepartoDirector({ activos }: Props) {
                 </p>
               )}
 
+              {e.tareas.length > 0 && (e.estado === "repartido" || e.estado === "error") && (
+                <ul className="mt-2 flex flex-col gap-1.5" aria-label="Cómo va cada agente">
+                  {e.tareas.map((t) => (
+                    <li key={t.id} className="text-sm">
+                      <details>
+                        <summary className="cursor-pointer">
+                          <span className="font-semibold">{t.agente}</span>
+                          <span className={t.aviso ? "text-red-300" : "text-muted"}>
+                            {" "}
+                            · {t.aviso ? "Ha fallado" : t.estado === "revisada" ? "Revisada" : TEXTO_ESTADO_TAREA[t.estado]}
+                          </span>
+                        </summary>
+                        <p className="mt-1 whitespace-pre-line pl-4 leading-relaxed text-muted">{t.instrucciones}</p>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               {(e.estado === "error" || e.atascado) && (
                 <div className="mt-2 flex flex-col gap-2">
                   <p className="text-sm">
                     {e.estado === "error"
-                      ? e.aviso || "Algo ha fallado al repartir este encargo."
+                      ? e.aviso || "Algo ha fallado con este encargo."
                       : "Este encargo lleva más de 10 minutos sin avanzar (puede que se cortara la ejecución)."}
                   </p>
                   <button

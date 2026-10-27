@@ -1,5 +1,5 @@
 import "server-only";
-import { cargarActivos, cargarCola, cargarHistorial, cargarTareasPendientes, estaAtascado, type EncargoVista, type TareaVista } from "./encargos";
+import { cargarActivos, cargarCola, cargarHistorial, cargarTareasAgente, estaAtascado, type EncargoVista, type TareaVista } from "./encargos";
 import type { FotoEncargo } from "@/components/carteles/PlantillasCartel";
 
 
@@ -36,7 +36,7 @@ export async function cargarFicha(agenteId: string, tipo: TipoFicha): Promise<Da
 
   const esDisenador = tipo === "diseno";
   const [tareas, cola, historial] = await Promise.all([
-    cargarTareasPendientes(agenteId),
+    cargarTareasAgente(agenteId),
     esDisenador ? cargarCola() : Promise.resolve([]),
     esDisenador ? cargarHistorial() : Promise.resolve([]),
   ]);

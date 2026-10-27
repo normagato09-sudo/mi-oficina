@@ -64,7 +64,13 @@ export const EJEMPLOS: { [P in Plantilla]: Record<string, string> } = {
   foto: { titulo: "¡Ya estamos aquí!", texto: "Empieza la nueva temporada. Te esperamos." },
 };
 
-/** JSON Schema de la respuesta del Diseñador (salida estructurada). */
+/** Todos los textos que puede llevar un cartel (cada plantilla usa los suyos; el resto, vacíos). */
+const CLAVES_TEXTOS = [...new Set(Object.values(CAMPOS).flatMap((c) => c.map((campo) => campo.clave)))];
+
+/**
+ * JSON Schema de la respuesta del Diseñador (salida estructurada en modo estricto: todas las
+ * propiedades obligatorias y sin tipos mixtos). `foto` es -1 si no lleva foto.
+ */
 export const ESQUEMA_CARTEL = {
   type: "object",
   additionalProperties: false,
@@ -74,13 +80,16 @@ export const ESQUEMA_CARTEL = {
     tamano: { type: "string", enum: Object.keys(TAMANOS), description: "cuadrado (1080×1080) o vertical (1080×1350)" },
     textos: {
       type: "object",
-      description: "Solo los campos de la plantilla elegida. Textos cortos y legibles; nunca inventes datos.",
-      additionalProperties: { type: "string" },
+      additionalProperties: false,
+      required: CLAVES_TEXTOS,
+      description:
+        "Rellena solo los campos de la plantilla elegida (convocatoria: titulo, subtitulo, fecha, hora, lugar, llamada; frase: frase, contexto; foto: titulo, texto) y deja los demás vacíos. Textos cortos y legibles; nunca inventes datos.",
+      properties: Object.fromEntries(CLAVES_TEXTOS.map((clave) => [clave, { type: "string" }])),
     },
-    foto: { type: ["integer", "null"], description: "Índice de la imagen adjunta que va de fondo (plantilla foto), o null" },
+    foto: { type: "integer", description: "Número de la imagen adjunta que va de fondo (0 = la primera) en la plantilla foto; -1 si no lleva foto." },
     explicacion: { type: "string", description: "Breve explicación de las decisiones de diseño" },
   },
-} as const;
+};
 
 /** Valida y normaliza la respuesta del Diseñador. Lanza un Error si no es válida. */
 export function leerCartel(valor: unknown): CartelDiseñador {

@@ -6,7 +6,7 @@ import PanelFicha from "@/components/ficha/PanelFicha";
 import { SinFicha } from "@/components/ficha/navegacion";
 import PanelProyecto from "@/components/panel/PanelProyecto";
 import PanelProyectos from "@/components/panel/PanelProyectos";
-import { avanzarCola } from "@/lib/reparto";
+import { avanzarCola } from "@/lib/cola";
 import { cargarOficina, cargarTodosLosProyectos, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
 import type { Edificio } from "@/lib/tipos";

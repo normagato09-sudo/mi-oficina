@@ -8,10 +8,23 @@ export type Luz = "apagada" | "amarillo" | "rojo" | "verde";
 /** Cómo va el reparto del Director (encargos en curso, en error o esperando mi respuesta). */
 export type ResumenReparto = {
   enCurso: boolean;
+  /** El Director está revisando el trabajo de un agente. */
+  revisando: boolean;
   /** Encargos en los que el Director me ha hecho una pregunta. */
   esperando: number;
   /** Texto corto si el encargo en curso ha fallado (se ve en rojo), o null. */
   error: string | null;
+};
+
+/** Tareas de un agente según su paso. */
+export type ResumenTareas = {
+  pendientes: number;
+  /** Trabajando en ella ahora mismo. */
+  trabajando: number;
+  /** Entregada: esperando o en revisión del Director, o revisada esperando al resto del equipo. */
+  enRevision: number;
+  /** Todo el encargo revisado: te necesita. */
+  listas: number;
 };
 
 export type EstadoAgente = {
@@ -32,8 +45,8 @@ export function estadoAgente(
     sinVer: number;
     activo?: boolean;
     aviso_ia?: string | null;
-    /** Tareas que le ha repartido el Director y aún no ha hecho. */
-    tareasPendientes?: number;
+    /** Sus tareas, por paso. */
+    tareas?: ResumenTareas;
     /** Solo el Director: cómo va el reparto de los encargos. */
     reparto?: ResumenReparto;
   },
@@ -47,12 +60,18 @@ export function estadoAgente(
   if (agente.aviso_ia) return { ...base, luz: "rojo", texto: agente.aviso_ia };
   if (reparto?.error) return { ...base, luz: "rojo", texto: reparto.error };
   if (reparto?.esperando) return { ...base, luz: "rojo", texto: reparto.esperando === 1 ? "Te ha hecho una pregunta" : `${reparto.esperando} preguntas para ti` };
+  const tareas = agente.tareas;
+  // Su trabajo está revisado y listo: te necesita.
+  if (tareas?.listas) return { ...base, luz: "rojo", texto: "Te necesita" };
   if (reparto?.enCurso) return { ...base, trabajando: true, luz: "amarillo", texto: "Repartiendo…" };
+  if (reparto?.revisando) return { ...base, trabajando: true, luz: "amarillo", texto: "Revisando…" };
+  if (tareas?.trabajando) return { ...base, trabajando: true, luz: "amarillo", texto: "Trabajando…" };
   if (estados.lista > 0) return { ...base, luz: "rojo", texto: "Te necesita" };
   if (estados.error > 0) return { ...base, luz: "rojo", texto: "Error" };
   if (estados.preparando > 0) return { ...base, luz: "amarillo", texto: "Preparando…" };
   if (estados.publicando > 0) return { ...base, luz: "amarillo", texto: "Publicando…" };
-  if (agente.tareasPendientes) return { ...base, luz: "amarillo", texto: "Tarea pendiente" };
+  if (tareas?.enRevision) return { ...base, luz: "amarillo", texto: "En revisión" };
+  if (tareas?.pendientes) return { ...base, luz: "amarillo", texto: "Tarea pendiente" };
   if (sinVer > 0) return { ...base, luz: "verde", texto: "¡Terminado!" };
   if (enCola > 0) return { ...base, luz: "apagada", texto: `${enCola} en cola` };
   return { ...base, luz: "apagada", texto: "Libre" };

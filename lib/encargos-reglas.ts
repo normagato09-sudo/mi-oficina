@@ -20,21 +20,33 @@ export function esTipoAdjunto(tipo: string): tipo is TipoAdjunto {
   return tipo in TIPOS_ADJUNTO;
 }
 
-export type EstadoEncargo = "en_cola" | "en_curso" | "esperando_respuesta" | "repartido" | "error" | "terminado" | "cancelado";
+export type EstadoEncargo =
+  | "en_cola"
+  | "en_curso"
+  | "esperando_respuesta"
+  | "repartido"
+  | "listo_revision"
+  | "error"
+  | "terminado"
+  | "cancelado";
 
 export const TEXTO_ESTADO_ENCARGO: Record<EstadoEncargo, string> = {
   en_cola: "En cola",
   en_curso: "En curso",
   esperando_respuesta: "Esperando tu respuesta",
-  repartido: "Repartido",
+  repartido: "El equipo trabaja",
+  listo_revision: "Listo para revisar",
   error: "Error",
   terminado: "Terminado",
   cancelado: "Cancelado",
 };
 
-export const TEXTO_ESTADO_TAREA: Record<"pendiente" | "en_curso" | "terminada" | "error", string> = {
+export const TEXTO_ESTADO_TAREA: Record<"pendiente" | "en_curso" | "revision" | "revisando" | "revisada" | "lista" | "error", string> = {
   pendiente: "Pendiente",
-  en_curso: "En curso",
-  terminada: "Terminada",
+  en_curso: "Trabajando…",
+  revision: "Esperando revisión",
+  revisando: "El Director lo revisa…",
+  revisada: "Revisada",
+  lista: "Lista",
   error: "Error",
 };

@@ -1,34 +1,20 @@
 import "server-only";
-import { contextoAgente, sistemaDeAgente, NOMBRE_DESPACHO } from "./datos";
-import { BUCKET_ENCARGOS, type Encargo, type Pregunta } from "./encargos";
+import { contextoAgente, sistemaDeAgente } from "./datos";
+import { NOMBRE_DESPACHO } from "./despachos";
+import type { Encargo, Pregunta } from "./encargos";
 import type { EstadoEncargo } from "./encargos-reglas";
-import { generarEstructurado, IAError, LimiteIAError, MENSAJE_LIMITE, type EsquemaJSON, type ImagenIA } from "./ia";
+import { generarEstructurado, IAError, type EsquemaJSON } from "./ia";
+import { ENCADENADO, ahoraConMargen, avisoDeError, cargarImagenes, conReintento, pasoHasta, textoEncargo } from "./pasos";
 import { supabase } from "./supabase";
+import { ENTREGAS, esDespachoTrabajo } from "./trabajos";
 import type { Agente, Despacho } from "./tipos";
 
 /**
- * Cola automática del Director: los encargos se atienden de uno en uno (urgentes primero).
- *
- * Todo corre en segundo plano con after() (maxDuration = 60 s). Cada paso es una llamada corta
- * a la IA; lo que no cabe en una ejecución se deja preparado (reintentar_en) para la siguiente,
- * que llega con el refresco de la página (cada 4 s mientras hay algo en curso).
+ * El Director reparte: lee el encargo y decide a qué agentes se lo encarga (con instrucciones)
+ * o qué dato le falta preguntar a la CEO. Es el primer paso de cada encargo en la cola (lib/cola.ts).
  */
 
-/** Tiempo útil de cada ejecución (maxDuration = 60 s, con margen para guardar). */
-const PRESUPUESTO_MS = 50_000;
-/** Si ya se ha gastado esto, no se empieza otra llamada a la IA en esta ejecución. */
-const MAX_PARA_EMPEZAR_MS = 25_000;
-/** Lo que se tarda, como mucho, en una llamada a la IA (para decidir si cabe esperar y reintentar). */
-const DURACION_LLAMADA_MS = 20_000;
-/** Mientras una ejecución procesa un encargo, nadie más lo toca (y si se corta, deja de valer). */
-const DURACION_PASO_S = 70;
-const MAX_IMAGENES = 3;
-/** Texto de los PDF que se le pasa al Director (la cuenta gratuita de Groq admite 8.000 tokens por minuto). */
-const MAX_CARACTERES_PDF = 6_000;
-const MAX_CARACTERES_PERFIL = 220;
 const MAX_TOKENS_REPARTO = 3_000;
-/** Diferencia de reloj tolerada entre este servidor y la base de datos. */
-const MARGEN_RELOJ_MS = 5_000;
 
 type Decision = {
   accion: "repartir" | "preguntar";
@@ -37,43 +23,15 @@ type Decision = {
   tareas: { agente_id: string; instrucciones: string }[];
 };
 
-const dormir = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Hace avanzar la cola: si no hay ningún encargo en curso, empieza el primero; si hay uno listo
- * para continuar, lo procesa. Al terminar uno, sigue con el siguiente mientras quede tiempo.
- * Nunca lanza: los fallos se guardan en el encargo (rojo, "Reintentar").
- */
-export async function avanzarCola(): Promise<void> {
-  const inicio = Date.now();
-  try {
-    while (true) {
-      // Pasa el primero de la cola a "en curso" (si no hay ya uno); si no da tiempo a procesarlo,
-      // queda listo y lo coge la siguiente ejecución.
-      const { error } = await supabase().rpc("empezar_siguiente_encargo");
-      if (error) {
-        console.error(`Cola del Director: ${error.message}. ¿Has ejecutado la migración 0010?`);
-        return;
-      }
-      if (Date.now() - inicio > MAX_PARA_EMPEZAR_MS) return;
-      const encargo = await tomarEncargoListo();
-      if (!encargo) return;
-      await procesarEncargo(encargo, inicio);
-    }
-  } catch (e) {
-    console.error("Cola del Director:", e);
-  }
-}
-
 /**
  * Toma el encargo en curso que esté listo para continuar (y que no esté procesando otra ejecución).
  * La base de datos marca "listo" con su propio reloj: se da un margen por si el del servidor va algo atrasado.
  */
-async function tomarEncargoListo(): Promise<Encargo | null> {
-  const ahora = new Date(Date.now() + MARGEN_RELOJ_MS).toISOString();
+export async function tomarEncargoListo(): Promise<Encargo | null> {
+  const ahora = ahoraConMargen();
   const { data, error } = await supabase()
     .from("encargos")
-    .update({ reintentar_en: null, paso_hasta: new Date(Date.now() + DURACION_PASO_S * 1000).toISOString() })
+    .update({ reintentar_en: null, paso_hasta: pasoHasta() })
     .eq("estado", "en_curso" satisfies EstadoEncargo)
     .lte("reintentar_en", ahora)
     .or(`paso_hasta.is.null,paso_hasta.lt.${ahora}`)
@@ -89,48 +47,23 @@ async function actualizar(id: string, cambios: Record<string, unknown>): Promise
 }
 
 /** Un paso del Director con un encargo: decide y guarda el resultado (reparto, pregunta o error). */
-async function procesarEncargo(encargo: Encargo, inicio: number): Promise<void> {
+export async function procesarEncargo(encargo: Encargo, inicio: number): Promise<void> {
   try {
-    const decision = await decidirConReintento(encargo, inicio);
-    if (decision === "encadenado") return;
+    const decision = await conReintento(() => decidir(encargo), {
+      reintentos: encargo.reintentos ?? 0,
+      inicio,
+      encadenar: (reintentarEn) => actualizar(encargo.id, { reintentos: 1, paso_hasta: null, reintentar_en: reintentarEn }),
+    });
+    if (decision === ENCADENADO) return;
     await aplicarDecision(encargo, decision);
   } catch (e) {
-    const aviso =
-      e instanceof LimiteIAError
-        ? `${MENSAJE_LIMITE}${e.reintentarEnSegundos ? ` (Groq pide esperar ${Math.ceil(e.reintentarEnSegundos / 60)} min)` : ""}.`
-        : e instanceof Error
-          ? e.message
-          : String(e);
+    const aviso = avisoDeError(e);
     console.error(`Encargo ${encargo.id}:`, aviso);
     await actualizar(encargo.id, { estado: "error" satisfies EstadoEncargo, aviso, paso_hasta: null, reintentar_en: null });
   }
 }
 
-/**
- * Límite de Groq con poca espera (menos de 60 s): espera y reintenta una sola vez, aquí mismo si
- * cabe en esta ejecución o en la siguiente si no. Con más espera, o si vuelve a fallar, lanza el error.
- */
-async function decidirConReintento(encargo: Encargo, inicio: number): Promise<Decision | "encadenado"> {
-  try {
-    return await decidir(encargo);
-  } catch (e) {
-    const espera = e instanceof LimiteIAError ? e.reintentarEnSegundos : undefined;
-    if (espera === undefined || espera >= 60 || (encargo.reintentos ?? 0) >= 1) throw e;
-    if (Date.now() - inicio + espera * 1000 + DURACION_LLAMADA_MS < PRESUPUESTO_MS) {
-      await dormir(espera * 1000 + 500);
-      return await decidir(encargo);
-    }
-    await actualizar(encargo.id, {
-      reintentos: 1,
-      paso_hasta: null,
-      // + el margen de reloj: así no se toma antes de que Groq deje volver a llamar.
-      reintentar_en: new Date(Date.now() + espera * 1000 + 500 + MARGEN_RELOJ_MS).toISOString(),
-    });
-    return "encadenado";
-  }
-}
-
-/** El equipo al que se puede repartir: agentes activos con despacho, menos el Director. */
+/** El equipo al que se puede repartir: agentes activos con despacho de trabajo (todos menos el Director). */
 async function cargarEquipo(directorId: string): Promise<(Agente & { despacho: Despacho })[]> {
   const { data, error } = await supabase()
     .from("agentes")
@@ -140,46 +73,23 @@ async function cargarEquipo(directorId: string): Promise<(Agente & { despacho: D
     .order("creado_en")
     .returns<(Agente & { despacho: Despacho })[]>();
   if (error) throw new Error(`No se pudo leer el equipo: ${error.message}`);
-  return (data ?? []).filter((a) => a.activo !== false && a.despacho in NOMBRE_DESPACHO);
-}
-
-/** Hasta 3 imágenes adjuntas, en base64, para que el Director las vea. */
-async function cargarImagenes(encargo: Encargo): Promise<ImagenIA[]> {
-  const rutas = encargo.adjuntos.flatMap((a) => (a.tipo === "imagen" ? [a.ruta] : [])).slice(0, MAX_IMAGENES);
-  const almacen = supabase().storage.from(BUCKET_ENCARGOS);
-  return Promise.all(
-    rutas.map(async (ruta) => {
-      const { data, error } = await almacen.download(ruta);
-      if (error || !data) throw new IAError(`No se pudo leer una imagen adjunta: ${error?.message ?? ruta}`);
-      return { tipo: "image/jpeg" as const, base64: Buffer.from(await data.arrayBuffer()).toString("base64") };
-    }),
-  );
+  return (data ?? []).filter((a) => a.activo !== false && esDespachoTrabajo(a.despacho));
 }
 
 const INSTRUCCIONES_REPARTO = `Ahora tu trabajo es REPARTIR este encargo, no hacerlo tú.
 - Decide qué agente o agentes del equipo deben hacerlo. Puede ser más de uno (por ejemplo, el Diseñador para el cartel e Instagram para la publicación). Elige solo agentes de la lista del equipo, por su id, y solo los que de verdad hagan falta.
-- Para cada uno, escribe instrucciones claras y concretas: qué tiene que entregar, en qué formato e idioma, y copia los datos exactos que necesite (fechas, horas, lugares, nombres, cifras). No inventes datos.
+- Cada agente SOLO puede entregar lo que pone en su "Entrega". Pide únicamente eso: nunca PDF, Word, archivos .txt, A4 para imprimir, vídeos ni nada que no esté en su lista.
+- Para cada uno, escribe instrucciones claras y concretas: qué tiene que entregar (de su lista) y en qué idioma, y copia los datos exactos que necesite (fechas, horas, lugares, nombres, cifras). No inventes datos.
+- Si varios agentes trabajan en el mismo encargo, dales a todos exactamente los mismos datos (fechas, horas, lugar) para que digan lo mismo.
 - Si falta un dato imprescindible que no se puede sacar del encargo, de los adjuntos ni de la ficha del proyecto, NO repartas: haz una sola pregunta, corta y concreta, a la CEO (accion "preguntar", tareas vacías). No preguntes por lo que puedes decidir tú con sentido común (tono, hashtags, diseño, longitud…).
+- Las fotos e imágenes NO son imprescindibles: el Diseñador hace carteles sin foto (plantillas convocatoria y frase o dato) e Instagram puede publicar el cartel. Nunca preguntes por fotos, imágenes, logos ni colores.
 - Si repartes, deja "pregunta" vacía.
 - Escribe el resumen, la pregunta y las instrucciones en español.`;
 
-/** Lo que lee el Director: el encargo, los PDF, las preguntas ya respondidas y el equipo. */
-function mensajeReparto(encargo: Encargo, proyecto: string, equipo: Agente[], imagenes: number): string {
-  const partes = [`Encargo para el proyecto "${proyecto}"${encargo.urgente ? " (URGENTE)" : ""}:\n${encargo.texto.trim() || "(sin texto: mira los adjuntos)"}`];
-
-  let restante = MAX_CARACTERES_PDF;
-  const pdfs = encargo.adjuntos.flatMap((a) => (a.tipo === "pdf" ? [a] : []));
-  for (const pdf of pdfs) {
-    const texto = pdf.texto.slice(0, Math.max(0, restante));
-    restante -= texto.length;
-    partes.push(
-      `PDF adjunto "${pdf.nombre}" (${pdf.paginas} págs.)${texto.length < pdf.texto.length ? ", recortado" : ""}:\n${texto || "(sin texto legible)"}`,
-    );
-  }
-  const totalImagenes = encargo.adjuntos.filter((a) => a.tipo === "imagen").length;
-  if (totalImagenes) {
-    partes.push(`Imágenes adjuntas: ${totalImagenes}${imagenes < totalImagenes ? ` (te envío las ${imagenes} primeras)` : " (te las envío)"}. Los agentes las recibirán con su tarea.`);
-  }
+/** Lo que lee el Director: el encargo, los PDF, las preguntas ya respondidas y el equipo con lo que entrega cada uno. */
+function mensajeReparto(encargo: Encargo, proyecto: string, equipo: (Agente & { despacho: Despacho })[], imagenes: number): string {
+  const partes = [`Encargo para el proyecto "${proyecto}"${encargo.urgente ? " (URGENTE)" : ""}:\n${textoEncargo(encargo, imagenes)}`];
+  if (encargo.adjuntos.some((a) => a.tipo === "imagen")) partes.push("Los agentes recibirán las imágenes adjuntas con su tarea.");
 
   const preguntas = (encargo.preguntas ?? []).filter((p): p is Pregunta & { respuesta: string } => p.respuesta !== null);
   if (preguntas.length) {
@@ -188,11 +98,7 @@ function mensajeReparto(encargo: Encargo, proyecto: string, equipo: Agente[], im
 
   partes.push(
     `Equipo disponible (elige por id):\n${equipo
-      .map((a) => {
-        const perfil = a.instrucciones.trim().replace(/\s+/g, " ");
-        const corto = perfil.length > MAX_CARACTERES_PERFIL ? `${perfil.slice(0, MAX_CARACTERES_PERFIL)}…` : perfil;
-        return `- id ${a.id} · ${a.nombre} (${NOMBRE_DESPACHO[a.despacho as Despacho] ?? a.despacho}): ${corto}`;
-      })
+      .map((a) => `- id ${a.id} · ${a.nombre} (${NOMBRE_DESPACHO[a.despacho]}). Entrega: ${esDespachoTrabajo(a.despacho) ? ENTREGAS[a.despacho] : "—"}`)
       .join("\n")}`,
   );
   return partes.join("\n\n");
@@ -216,7 +122,7 @@ function esquemaReparto(ids: string[]): EsquemaJSON {
           required: ["agente_id", "instrucciones"],
           properties: {
             agente_id: { type: "string", enum: ids },
-            instrucciones: { type: "string", description: "Qué tiene que hacer y entregar, con los datos exactos." },
+            instrucciones: { type: "string", description: "Qué tiene que hacer y entregar (solo de su lista), con los datos exactos." },
           },
         },
       },
@@ -226,10 +132,12 @@ function esquemaReparto(ids: string[]): EsquemaJSON {
 
 /** Una llamada a la IA: el Director lee todo y decide a quién reparte (o qué pregunta). */
 async function decidir(encargo: Encargo): Promise<Decision> {
-  const contexto = await contextoAgente(encargo.director_id, encargo.edificio_id);
-  const equipo = await cargarEquipo(encargo.director_id);
+  const [contexto, equipo, imagenes] = await Promise.all([
+    contextoAgente(encargo.director_id, encargo.edificio_id),
+    cargarEquipo(encargo.director_id),
+    cargarImagenes(encargo),
+  ]);
   if (!equipo.length) throw new IAError("No hay ningún agente activo en el equipo al que repartir.");
-  const imagenes = await cargarImagenes(encargo);
 
   const decision = await generarEstructurado<Decision>({
     sistema: `${sistemaDeAgente(contexto)}\n\n${INSTRUCCIONES_REPARTO}`,
@@ -252,7 +160,7 @@ async function decidir(encargo: Encargo): Promise<Decision> {
   };
 }
 
-/** Guarda la decisión: una pregunta para mí o una tarea por agente. */
+/** Guarda la decisión: una pregunta para mí o una tarea por agente (que la cola pondrá a trabajar). */
 async function aplicarDecision(encargo: Encargo, decision: Decision): Promise<void> {
   const db = supabase();
   if (decision.pregunta && (decision.accion === "preguntar" || !decision.tareas.length)) {

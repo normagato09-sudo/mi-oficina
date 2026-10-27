@@ -16,7 +16,7 @@ import {
   type ArchivoPedido,
   type SubidaPreparada,
 } from "@/lib/encargos";
-import { avanzarCola } from "@/lib/reparto";
+import { avanzarCola } from "@/lib/cola";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
 type Resultado = { ok?: true; error?: string };

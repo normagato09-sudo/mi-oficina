@@ -1,6 +1,6 @@
 import "server-only";
 import { NOMBRE_DESPACHO, ORDEN_DESPACHOS } from "./despachos";
-import { estadoAgente, type ResumenReparto } from "./estado";
+import { estadoAgente, type ResumenReparto, type ResumenTareas } from "./estado";
 import { LimiteIAError, MENSAJE_LIMITE } from "./ia";
 import { supabase } from "./supabase";
 import type { Agente, Aviso, Despacho, Edificio, EstadoPublicacion, Publicacion } from "./tipos";
@@ -11,8 +11,8 @@ export type AgenteConEstado = Agente & {
   estados: Record<EstadoPublicacion, number>;
   /** Publicaciones publicadas después de la última vez que se abrió su ficha. */
   sinVer: number;
-  /** Tareas que le ha repartido el Director y aún no ha hecho. */
-  tareasPendientes: number;
+  /** Sus tareas, por paso (pendientes, trabajando, en revisión, listas). */
+  tareas: ResumenTareas;
   /** Solo el Director: cómo va el reparto de los encargos. */
   reparto?: ResumenReparto;
 };
@@ -119,12 +119,16 @@ async function consultarEquipo(columnas: string): Promise<FilaAgente[]> {
 async function consultarActividad() {
   const db = supabase();
   // Sin la migración 0010 no hay tareas ni estos estados: todo a cero (no se lanza error).
-  const [publicaciones, tareas, activos, cola, avisos, ultimoEncargo, ultimaTarea] = await Promise.all([
+  const [publicaciones, tareasRes, activos, cola, avisos, ultimoEncargo, ultimaTarea] = await Promise.all([
     db
       .from("publicaciones")
       .select("agente_id, estado, actualizado_en")
       .returns<{ agente_id: string; estado: EstadoPublicacion; actualizado_en: string }[]>(),
-    db.from("tareas").select("agente_id, estado").in("estado", ["pendiente"]).returns<{ agente_id: string; estado: string }[]>(),
+    db
+      .from("tareas")
+      .select("agente_id, estado")
+      .in("estado", ["pendiente", "en_curso", "revision", "revisando", "revisada", "lista"])
+      .returns<{ agente_id: string; estado: string }[]>(),
     db
       .from("encargos")
       .select("estado, aviso, edificio_id, actualizado_en")
@@ -142,27 +146,41 @@ async function consultarActividad() {
 
   const filas = activos.data ?? [];
   const enError = filas.find((e) => e.estado === "error");
+  const tareas = tareasRes.data ?? [];
   const reparto: ResumenReparto = {
     enCurso: filas.some((e) => e.estado === "en_curso"),
+    revisando: tareas.some((t) => t.estado === "revisando"),
     esperando: filas.filter((e) => e.estado === "esperando_respuesta").length,
     error: enError ? (enError.aviso?.startsWith(MENSAJE_LIMITE) ? "Límite de la IA: reintenta" : "Error al repartir") : null,
   };
   const enCola = cola.count ?? 0;
   return {
     publicaciones: publicaciones.data ?? [],
-    tareas: tareas.data ?? [],
+    tareas,
     reparto,
     enCola,
     avisosSinLeer: avisos.count ?? 0,
     /** Proyecto del encargo en curso (su cartel cuelga en Dirección), o null. */
     proyectoEnCurso: filas.find((e) => e.estado === "en_curso")?.edificio_id ?? null,
-    /** Hay que seguir mirando: el Director trabaja o hay cola que puede empezar. */
-    activo: reparto.enCurso || (enCola > 0 && !reparto.error),
+    /** Hay que seguir mirando: el Director o el equipo trabajan, o hay cola que puede empezar. */
+    activo:
+      reparto.enCurso ||
+      (!reparto.error && (enCola > 0 || tareas.some((t) => ["pendiente", "en_curso", "revision", "revisando"].includes(t.estado)))),
     ultimoCambio: [ultimoEncargo.data?.[0]?.actualizado_en, ultimaTarea.data?.[0]?.actualizado_en].join("|"),
   };
 }
 
 type Actividad = Awaited<ReturnType<typeof consultarActividad>>;
+
+function resumenTareas(tareas: { estado: string }[]): ResumenTareas {
+  const cuantas = (...estados: string[]) => tareas.filter((t) => estados.includes(t.estado)).length;
+  return {
+    pendientes: cuantas("pendiente"),
+    trabajando: cuantas("en_curso"),
+    enRevision: cuantas("revision", "revisando", "revisada"),
+    listas: cuantas("lista"),
+  };
+}
 
 /** Cada agente con el recuento de sus publicaciones, sus tareas y (el Director) el reparto. */
 function conEstados(equipo: FilaAgente[], actividad: Actividad): AgenteConEstado[] {
@@ -174,7 +192,7 @@ function conEstados(equipo: FilaAgente[], actividad: Actividad): AgenteConEstado
       sinVer: a.visto_en
         ? suyas.filter((p) => p.estado === "publicada" && Date.parse(p.actualizado_en) > Date.parse(a.visto_en!)).length
         : 0,
-      tareasPendientes: actividad.tareas.filter((t) => t.agente_id === a.id && t.estado === "pendiente").length,
+      tareas: resumenTareas(actividad.tareas.filter((t) => t.agente_id === a.id)),
       ...(a.despacho === "direccion" && a.tipo === "direccion" ? { reparto: actividad.reparto } : {}),
     };
   });

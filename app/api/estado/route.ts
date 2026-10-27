@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { cargarEstadoOficina } from "@/lib/datos";
-import { avanzarCola } from "@/lib/reparto";
+import { avanzarCola } from "@/lib/cola";
 
 // La sesión la comprueba proxy.ts (las rutas /api sin sesión reciben 401).
 

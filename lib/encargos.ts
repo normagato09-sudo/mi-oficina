@@ -4,7 +4,8 @@ import sharp from "sharp";
 import { extractText, getDocumentProxy } from "unpdf";
 import { supabase } from "./supabase";
 import { MAX_ADJUNTOS, MAX_BYTES_ADJUNTO, MAX_CARACTERES_ENCARGO, TIPOS_ADJUNTO, esTipoAdjunto, type EstadoEncargo } from "./encargos-reglas";
-import type { Agente } from "./tipos";
+import type { Resultado } from "./trabajos";
+import type { Agente, Edificio } from "./tipos";
 
 export const BUCKET_ENCARGOS = "encargos";
 
@@ -43,7 +44,11 @@ export type Encargo = {
 
 export type Pregunta = { pregunta: string; respuesta: string | null };
 
-export type EstadoTarea = "pendiente" | "en_curso" | "terminada" | "error";
+/**
+ * pendiente → en_curso (el agente trabaja) → revision → revisando (el Director revisa)
+ *   → revisada (bien, o a la tercera vuelta) → lista (todo el encargo revisado: te necesita).
+ */
+export type EstadoTarea = "pendiente" | "en_curso" | "revision" | "revisando" | "revisada" | "lista" | "error";
 
 /** Lo que el Director ha encargado a un agente (migración 0010). */
 export type Tarea = {
@@ -52,16 +57,33 @@ export type Tarea = {
   agente_id: string;
   instrucciones: string;
   estado: EstadoTarea;
+  /** El resultado en texto plano (para revisar y copiar). */
   resultado: string;
   creado_en: string;
   actualizado_en: string;
+  // Trabajo y revisión (migración 0011):
+  /** Resultado estructurado del agente. */
+  resultado_json?: Resultado | null;
+  /** Qué ha hecho el agente y por qué. */
+  nota_agente?: string | null;
+  /** Nota del Director para la CEO (p. ej. si a la tercera vuelta sigue sin estar bien). */
+  nota_director?: string | null;
+  /** Comentarios del Director para que el agente lo rehaga. */
+  comentarios?: string | null;
+  /** Veces que el Director se lo ha devuelto. */
+  vueltas?: number;
+  aviso?: string | null;
+  reintentar_en?: string | null;
+  paso_hasta?: string | null;
+  reintentos?: number;
 };
 
 /** Encargo listo para mostrar: imágenes con URL firmada, el proyecto con nombre y color y a quién se ha repartido. */
 export type EncargoVista = Omit<Encargo, "adjuntos"> & {
   adjuntos: ((AdjuntoImagen & { url: string | null }) | (Omit<AdjuntoPdf, "texto"> & { caracteres: number }))[];
-  proyecto: { nombre: string; color: string };
-  tareas: (Pick<Tarea, "id" | "agente_id" | "instrucciones" | "estado"> & { agente: string })[];
+  /** El proyecto, con los datos de su cartel (para montar los carteles del Diseñador). */
+  proyecto: { nombre: string; color: string; colorSecundario: string; letrero: string; letreroSecundario: string | null };
+  tareas: (Pick<Tarea, "id" | "agente_id" | "instrucciones" | "estado" | "aviso" | "paso_hasta" | "actualizado_en"> & { agente: string })[];
 };
 
 /* ───────────── Imágenes y PDF ───────────── */
@@ -221,11 +243,16 @@ export async function crearEncargo({ director, proyectoId, texto, urgente, subid
  * Columnas de un encargo para mostrarlo: con su proyecto y sus tareas en la MISMA consulta
  * (joins de PostgREST), para no hacer más viajes a la base de datos.
  */
-const SELECT_VISTA = "*, edificios(nombre, color), tareas(id, agente_id, instrucciones, estado, creado_en, agentes(nombre))";
+const SELECT_VISTA =
+  "*, edificios(nombre, color, color_secundario, letrero, letrero_secundario), tareas(id, agente_id, instrucciones, estado, aviso, paso_hasta, creado_en, actualizado_en, agentes(nombre))";
 
 type FilaVista = Encargo & {
-  edificios: { nombre: string; color: string } | null;
-  tareas: (Pick<Tarea, "id" | "agente_id" | "instrucciones" | "estado" | "creado_en"> & { agentes: { nombre: string } | null })[] | null;
+  edificios: Pick<Edificio, "nombre" | "color" | "color_secundario" | "letrero" | "letrero_secundario"> | null;
+  tareas:
+    | (Pick<Tarea, "id" | "agente_id" | "instrucciones" | "estado" | "aviso" | "paso_hasta" | "creado_en" | "actualizado_en"> & {
+        agentes: { nombre: string } | null;
+      })[]
+    | null;
 };
 
 /** Firma las miniaturas (una sola petición, solo si hay imágenes) y da forma a cada encargo. */
@@ -245,10 +272,25 @@ async function paraMostrar(encargos: FilaVista[]): Promise<EncargoVista[]> {
         ? { ...a, url: urls.get(a.ruta) ?? null }
         : { tipo: "pdf" as const, nombre: a.nombre, paginas: a.paginas, caracteres: a.texto.length },
     ),
-    proyecto: { nombre: edificios?.nombre ?? "Proyecto", color: edificios?.color ?? "#8a93ad" },
+    proyecto: {
+      nombre: edificios?.nombre ?? "Proyecto",
+      color: edificios?.color ?? "#8a93ad",
+      colorSecundario: edificios?.color_secundario || edificios?.color || "#8a93ad",
+      letrero: edificios?.letrero || edificios?.nombre || "Proyecto",
+      letreroSecundario: edificios?.letrero_secundario || null,
+    },
     tareas: [...(tareas ?? [])]
       .sort((a, b) => a.creado_en.localeCompare(b.creado_en))
-      .map((t) => ({ id: t.id, agente_id: t.agente_id, instrucciones: t.instrucciones, estado: t.estado, agente: t.agentes?.nombre ?? "Agente" })),
+      .map((t) => ({
+        id: t.id,
+        agente_id: t.agente_id,
+        instrucciones: t.instrucciones,
+        estado: t.estado,
+        aviso: t.aviso,
+        paso_hasta: t.paso_hasta,
+        actualizado_en: t.actualizado_en,
+        agente: t.agentes?.nombre ?? "Agente",
+      })),
   }));
 }
 
@@ -266,12 +308,12 @@ export async function cargarCola(): Promise<EncargoVista[]> {
   return paraMostrar(data ?? []);
 }
 
-/** Encargos que el Director tiene entre manos: el que está en curso (o en error) y los que esperan mi respuesta. */
+/** Encargos que el Director tiene entre manos: el que reparte, el que hace el equipo (o en error) y los que esperan mi respuesta. */
 export async function cargarActivos(): Promise<EncargoVista[]> {
   const { data, error } = await supabase()
     .from("encargos")
     .select(SELECT_VISTA)
-    .in("estado", ["en_curso", "error", "esperando_respuesta"] satisfies EstadoEncargo[])
+    .in("estado", ["en_curso", "repartido", "error", "esperando_respuesta"] satisfies EstadoEncargo[])
     .order("actualizado_en")
     .returns<FilaVista[]>();
   // Sin la migración 0010 estos estados no existen: no hay nada activo.
@@ -279,12 +321,12 @@ export async function cargarActivos(): Promise<EncargoVista[]> {
   return paraMostrar(data ?? []);
 }
 
-/** Encargos ya repartidos, terminados o cancelados, del más reciente al más antiguo. */
+/** Encargos listos para revisar, terminados o cancelados, del más reciente al más antiguo. */
 export async function cargarHistorial(limite = 20): Promise<EncargoVista[]> {
   const { data, error } = await supabase()
     .from("encargos")
     .select(SELECT_VISTA)
-    .not("estado", "in", "(en_cola,en_curso,error,esperando_respuesta)")
+    .not("estado", "in", "(en_cola,en_curso,repartido,error,esperando_respuesta)")
     .order("actualizado_en", { ascending: false })
     .limit(limite)
     .returns<FilaVista[]>();
@@ -329,26 +371,52 @@ export async function cancelarEncargo(id: string): Promise<void> {
 /** Minutos "en curso" sin avanzar a partir de los cuales el encargo se da por atascado ("Reanudar"). */
 export const MINUTOS_ATASCADO = 10;
 
-export function estaAtascado(e: Pick<Encargo, "estado" | "actualizado_en" | "reintentar_en">): boolean {
-  return e.estado === "en_curso" && !e.reintentar_en && Date.now() - Date.parse(e.actualizado_en) > MINUTOS_ATASCADO * 60_000;
+export function estaAtascado(
+  e: Pick<Encargo, "estado" | "actualizado_en" | "reintentar_en"> & { tareas?: Pick<Tarea, "estado" | "paso_hasta" | "actualizado_en">[] | null },
+): boolean {
+  const viejo = (fecha: string) => Date.now() - Date.parse(fecha) > MINUTOS_ATASCADO * 60_000;
+  if (e.estado === "en_curso") return !e.reintentar_en && viejo(e.actualizado_en);
+  // El equipo trabaja: una tarea a medias cuya ejecución se cortó (nadie la tiene y lleva mucho sin moverse).
+  if (e.estado === "repartido") {
+    return (e.tareas ?? []).some(
+      (t) => (t.estado === "en_curso" || t.estado === "revisando") && (!t.paso_hasta || Date.parse(t.paso_hasta) < Date.now()) && viejo(t.actualizado_en),
+    );
+  }
+  return false;
 }
 
-export type TareaVista = Pick<Tarea, "id" | "instrucciones" | "creado_en"> & { encargo: EncargoVista };
+export type TareaVista = Pick<
+  Tarea,
+  "id" | "instrucciones" | "creado_en" | "estado" | "resultado_json" | "resultado" | "nota_agente" | "nota_director" | "vueltas"
+> & { encargo: EncargoVista };
 
-/** Tareas pendientes de un agente, de la más antigua a la más reciente, con el proyecto y los adjuntos de su encargo. */
-export async function cargarTareasPendientes(agenteId: string): Promise<TareaVista[]> {
-  // La tarea con su encargo (y el proyecto y las tareas de este) en una sola consulta.
+/**
+ * Tareas de un agente con su encargo (proyecto, adjuntos): las que tiene entre manos y las ya listas,
+ * de la más antigua a la más reciente. Una sola consulta (más las miniaturas).
+ */
+export async function cargarTareasAgente(agenteId: string): Promise<TareaVista[]> {
   const { data: tareas, error } = await supabase()
     .from("tareas")
     .select(`*, encargos(${SELECT_VISTA})`)
     .eq("agente_id", agenteId)
-    .eq("estado", "pendiente" satisfies EstadoTarea)
+    .in("estado", ["pendiente", "en_curso", "revision", "revisando", "revisada", "lista"] satisfies EstadoTarea[])
     .order("creado_en")
     .returns<(Tarea & { encargos: FilaVista | null })[]>();
-  if (error) throw new Error(`No se pudieron leer las tareas: ${error.message}. ¿Has ejecutado la migración 0010?`);
+  if (error) throw new Error(`No se pudieron leer las tareas: ${error.message}. ¿Has ejecutado la migración 0011?`);
   const conEncargo = (tareas ?? []).filter((t) => t.encargos);
   const encargos = await paraMostrar(conEncargo.map((t) => t.encargos!));
-  return conEncargo.map((t, i) => ({ id: t.id, instrucciones: t.instrucciones, creado_en: t.creado_en, encargo: encargos[i]! }));
+  return conEncargo.map((t, i) => ({
+    id: t.id,
+    instrucciones: t.instrucciones,
+    creado_en: t.creado_en,
+    estado: t.estado,
+    resultado: t.resultado,
+    resultado_json: t.resultado_json ?? null,
+    nota_agente: t.nota_agente ?? null,
+    nota_director: t.nota_director ?? null,
+    vueltas: t.vueltas ?? 0,
+    encargo: encargos[i]!,
+  }));
 }
 
 /**
@@ -395,19 +463,43 @@ export async function responderPregunta(id: string, respuesta: string): Promise<
   if (!data?.length) throw new Error("Este encargo ya no está esperando respuesta.");
 }
 
-/** "Reintentar" (encargo en error) o "Reanudar" (atascado en curso): el Director vuelve a empezar con él. */
+/**
+ * "Reintentar" (encargo en error) o "Reanudar" (atascado): se vuelve a poner en marcha.
+ * Si ya estaba repartido, siguen las tareas donde se quedaron; si no, el Director vuelve a decidir.
+ */
 export async function reanudarEncargo(id: string): Promise<void> {
   const db = supabase();
-  const { data: encargo, error } = await db.from("encargos").select("*").eq("id", id).maybeSingle<Encargo>();
+  const { data: encargo, error } = await db
+    .from("encargos")
+    .select("*, tareas(id, estado, aviso, paso_hasta, actualizado_en)")
+    .eq("id", id)
+    .maybeSingle<Encargo & { tareas: Pick<Tarea, "id" | "estado" | "aviso" | "paso_hasta" | "actualizado_en">[] | null }>();
   if (error) throw new Error(`No se pudo leer el encargo: ${error.message}`);
+  const tareas = encargo?.tareas ?? [];
   if (!encargo || !(encargo.estado === "error" || estaAtascado(encargo))) {
     throw new Error("Este encargo ya no necesita reintentarse.");
   }
+
+  if (tareas.length) {
+    // Las tareas a medias vuelven a su paso anterior y se quitan los avisos: la cola las retoma.
+    const ahora = new Date().toISOString();
+    const deshacer: [EstadoTarea, EstadoTarea][] = [
+      ["en_curso", "pendiente"],
+      ["revisando", "revision"],
+    ];
+    for (const [de, a] of deshacer) {
+      const { error: e } = await db.from("tareas").update({ estado: a, paso_hasta: null }).eq("encargo_id", id).eq("estado", de);
+      if (e) throw new Error(`No se pudo reanudar: ${e.message}`);
+    }
+    const { error: e1 } = await db.from("tareas").update({ aviso: null, reintentos: 0, reintentar_en: ahora }).eq("encargo_id", id);
+    if (e1) throw new Error(`No se pudo reanudar: ${e1.message}`);
+  }
+
   const { error: e2 } = await db
     .from("encargos")
     .update({
-      estado: "en_curso" satisfies EstadoEncargo,
-      reintentar_en: new Date().toISOString(),
+      estado: (tareas.length ? "repartido" : "en_curso") satisfies EstadoEncargo,
+      reintentar_en: tareas.length ? null : new Date().toISOString(),
       paso_hasta: null,
       reintentos: 0,
       aviso: null,
