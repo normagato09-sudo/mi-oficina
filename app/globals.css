@@ -34,3 +34,26 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* Juego: puertas del ascensor al cambiar de planta (se cierran desde los lados y se vuelven a abrir). */
+.puerta-ascensor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background: repeating-linear-gradient(90deg, #b9bec9 0 6px, #c9cdd6 6px 12px);
+  box-shadow: inset 0 0 0 2px #6b7280;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+.puerta-ascensor.izquierda { left: 0; }
+.puerta-ascensor.derecha { right: 0; }
+.puerta-ascensor.izquierda.cerrando { animation-name: puerta-izq-cierra; }
+.puerta-ascensor.derecha.cerrando { animation-name: puerta-der-cierra; }
+.puerta-ascensor.izquierda.abriendo { animation-name: puerta-izq-cierra; animation-direction: reverse; }
+.puerta-ascensor.derecha.abriendo { animation-name: puerta-der-cierra; animation-direction: reverse; }
+@keyframes puerta-izq-cierra { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes puerta-der-cierra { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .puerta-ascensor { animation-duration: 1ms !important; }
+}

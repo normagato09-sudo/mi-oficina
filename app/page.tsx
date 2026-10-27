@@ -12,6 +12,7 @@ import { avanzarCola } from "@/lib/cola";
 import { cargarAprendizajesEquipo } from "@/lib/aprendizajes";
 import { cargarOficina, cargarTodosLosProyectos, type DatosOficina } from "@/lib/datos";
 import { estadoAgente, plural } from "@/lib/estado";
+import { plantaDe } from "@/lib/plantas";
 import type { Edificio } from "@/lib/tipos";
 
 /** La cola del Director corre en segundo plano (after) en la página y en sus acciones: hasta 60 s. */
@@ -84,12 +85,14 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               </div>
             }
             clasica={<Oficina datos={datos} enCola={datos.enCola} proyectoCartel={proyectoCartel} equipoAbierto={equipoAbierto} />}
-            agentes={datos.agentes.filter((a) => a.despacho !== "jefatura").map((a) => {
+            agentes={datos.agentes.map((a) => {
               const estado = estadoAgente(a, a.despacho === "direccion" ? datos.enCola : 0);
               return {
                 id: a.id,
                 nombre: a.nombre,
                 despacho: a.despacho,
+                planta: plantaDe(a),
+                jefe: a.despacho === "jefatura" || (a.despacho === "direccion" && a.tipo === "direccion"),
                 luz: estado.luz,
                 texto: estado.texto,
                 trabajando: estado.trabajando,

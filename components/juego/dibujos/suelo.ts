@@ -1,4 +1,4 @@
-import { P, T, azar, px, tono, type Ctx } from "./comun";
+import { T, azar, px, tono, type Ctx } from "./comun";
 
 export type TipoSuelo = "moqueta" | "madera" | "marmol" | "baldosa";
 
