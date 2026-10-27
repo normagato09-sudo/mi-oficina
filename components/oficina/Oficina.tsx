@@ -1,9 +1,11 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { NOMBRE_DESPACHO, type AgenteConEstado, type DatosOficina } from "@/lib/datos";
+import type { AgenteConEstado, DatosOficina } from "@/lib/datos";
+import { NOMBRE_DESPACHO } from "@/lib/despachos";
 import { COLOR_LUZ, estadoAgente, plural } from "@/lib/estado";
 import { momentoEspana } from "@/lib/hora";
 import type { Despacho, Edificio } from "@/lib/tipos";
+import { EnlaceFicha } from "@/components/ficha/navegacion";
 import Ambiente from "./Ambiente";
 import Lienzo from "./Lienzo";
 import Personaje, { type Aspecto } from "./Personaje";
@@ -61,7 +63,6 @@ type Props = {
   enCola: number;
   /** Proyecto del encargo en curso: su cartel cuelga en Dirección (sin él, "MI OFICINA"). */
   proyectoCartel?: Edificio;
-  agenteSeleccionado?: string;
   /** La carpeta "Equipo" de la estantería está abierta. */
   equipoAbierto?: boolean;
 };
@@ -163,17 +164,14 @@ function ObjetosMesa({ despacho, enCola }: { despacho: Despacho; enCola: number 
 }
 
 /** Puesto de trabajo: personaje, mesa y objetos. Es un enlace que abre la ficha del agente. */
-function Puesto({ agente, x, seleccionado, enCola, corbata }: { agente: AgenteConEstado; x: number; seleccionado: boolean; enCola: number; corbata: string }) {
+function Puesto({ agente, x, enCola, corbata }: { agente: AgenteConEstado; x: number; enCola: number; corbata: string }) {
   const estado = estadoAgente(agente, enCola);
   const { aspecto, marca } = estiloAgente(agente, corbata);
   const tipo = agente.despacho;
   return (
-    <Link
-      href={seleccionado ? "/" : `/?agente=${agente.id}`}
-      scroll={false}
-      prefetch={false}
-      aria-current={seleccionado ? "true" : undefined}
-      aria-label={`${agente.nombre}: ${estado.texto}. ${seleccionado ? "Cerrar" : "Abrir"} ficha`}
+    <EnlaceFicha
+      agenteId={agente.id}
+      etiqueta={`${agente.nombre}: ${estado.texto}`}
       className={`puesto puesto-${tipo} marca-${marca} luz-${estado.luz}${estado.trabajando ? " trabajando" : ""}`}
       style={{ left: x, top: Y_PUESTO }}
     >
@@ -196,7 +194,7 @@ function Puesto({ agente, x, seleccionado, enCola, corbata }: { agente: AgenteCo
         <ObjetosMesa despacho={tipo} enCola={enCola} />
       </span>
       <span className="taza" aria-hidden="true" />
-    </Link>
+    </EnlaceFicha>
   );
 }
 
@@ -369,7 +367,7 @@ function decoracion(despacho: Despacho, props: Props): ReactNode {
 
 /** La oficina vista desde arriba: nueve despachos, el pasillo y un rincón de descanso. */
 export default function Oficina(props: Props) {
-  const { datos, enCola, agenteSeleccionado } = props;
+  const { datos, enCola } = props;
   const corbata = props.proyectoCartel ? letreroDe(props.proyectoCartel).colorSecundario : "#F5B841";
   const despachos = Object.keys(SALAS) as Despacho[];
 
@@ -388,7 +386,6 @@ export default function Oficina(props: Props) {
                   key={agente.id}
                   agente={agente}
                   x={xPuesto(i, suyos.length, SALAS[d].ancho)}
-                  seleccionado={agente.id === agenteSeleccionado}
                   enCola={d === "direccion" ? enCola : 0}
                   corbata={corbata}
                 />

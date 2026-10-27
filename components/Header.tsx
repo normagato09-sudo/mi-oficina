@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Logo from "./Logo";
 import Campana from "./Campana";
+import { BotonNuevoEncargo } from "./ficha/navegacion";
 import { logout } from "@/app/actions/auth";
 import type { Aviso } from "@/lib/tipos";
 
@@ -32,11 +33,7 @@ export default function Header({ directorId, avisos = [], proyectosAbierto = fal
           Proyectos
         </Link>
 
-        {directorId && (
-          <Link href={`/?agente=${directorId}&nuevo=1`} scroll={false} className="btn-primary">
-            + Nuevo encargo
-          </Link>
-        )}
+        {directorId && <BotonNuevoEncargo directorId={directorId} />}
 
         <Campana avisos={avisos} />
 

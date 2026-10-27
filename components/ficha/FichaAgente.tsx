@@ -1,6 +1,7 @@
-import Link from "next/link";
-import { NOMBRE_DESPACHO, type AgenteConEstado } from "@/lib/datos";
+import type { AgenteConEstado } from "@/lib/datos";
+import { NOMBRE_DESPACHO } from "@/lib/despachos";
 import { COLOR_LUZ, estadoAgente } from "@/lib/estado";
+import { CerrarFicha } from "./navegacion";
 
 type Props = {
   agente: AgenteConEstado;
@@ -30,14 +31,7 @@ export default function FichaAgente({ agente, color, enCola = 0, children }: Pro
     >
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-panel/95 px-4 py-2 backdrop-blur">
         <span className="text-sm text-muted">Ficha del agente</span>
-        <Link
-          href="/"
-          scroll={false}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-2xl leading-none text-muted hover:text-text"
-          aria-label="Cerrar ficha"
-        >
-          ×
-        </Link>
+        <CerrarFicha />
       </div>
 
       <div className="p-5">

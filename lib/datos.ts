@@ -1,5 +1,6 @@
 import "server-only";
-import type { ResumenReparto } from "./estado";
+import { NOMBRE_DESPACHO, ORDEN_DESPACHOS } from "./despachos";
+import { estadoAgente, type ResumenReparto } from "./estado";
 import { LimiteIAError, MENSAJE_LIMITE } from "./ia";
 import { supabase } from "./supabase";
 import type { Agente, Aviso, Despacho, Edificio, EstadoPublicacion, Publicacion } from "./tipos";
@@ -21,24 +22,19 @@ export type DatosOficina = {
   proyectos: Edificio[];
   /** El equipo: agentes activos con despacho. */
   agentes: AgenteConEstado[];
-  /** Hay un encargo en curso: la página se refresca sola hasta que termine. */
+  /** Avisos sin leer (campana). */
+  avisos: Aviso[];
+  /** Encargos esperando en la cola del Director. */
+  enCola: number;
+  /** Proyecto del encargo en curso: su cartel cuelga en Dirección. */
+  proyectoEnCurso: string | null;
+  /** El Director trabaja (o hay cola que puede empezar): la página sigue mirando si algo cambia. */
   hayEnCurso: boolean;
+  /** Huella de lo que se ve (ver cargarEstadoOficina). */
+  firma: string;
 };
 
-export const NOMBRE_DESPACHO: Record<Despacho, string> = {
-  direccion: "Dirección",
-  redes: "Redes sociales",
-  traduccion: "Traducción",
-  redaccion: "Redacción",
-  programacion: "Programación",
-  ciberseguridad: "Ciberseguridad",
-  secretaria: "Secretaría",
-  diseno: "Diseño",
-  informes: "Informes",
-};
-
-/** Orden de los despachos (fila de arriba y fila de abajo): también el de la carpeta "Equipo". */
-export const ORDEN_DESPACHOS = Object.keys(NOMBRE_DESPACHO) as Despacho[];
+export { NOMBRE_DESPACHO, ORDEN_DESPACHOS };
 
 function contarEstados(filas: { estado: EstadoPublicacion }[]): Record<EstadoPublicacion, number> {
   const estados: Record<EstadoPublicacion, number> = {
@@ -103,64 +99,131 @@ export async function activarProyecto(id: string, activo: boolean): Promise<void
   if (error) throw new Error(`No se pudo ${activo ? "activar" : "archivar"} el proyecto: ${error.message}`);
 }
 
-/** La oficina: los proyectos activos y el equipo con el recuento de estados de cada agente. */
-export async function cargarOficina(): Promise<DatosOficina> {
-  const db = supabase();
-  const proyectos = await cargarProyectos();
+type FilaAgente = Agente & { despacho: Despacho };
 
-  const { data: agentes, error: e1 } = await db
+/** El equipo: agentes activos con despacho, en el orden de los despachos. */
+async function consultarEquipo(columnas: string): Promise<FilaAgente[]> {
+  const { data, error } = await supabase()
     .from("agentes")
-    .select("*")
+    .select(columnas)
     .not("despacho", "is", null)
     .order("creado_en")
-    .returns<(Agente & { despacho: Despacho })[]>();
-  if (e1) throw new Error(`No se pudieron leer los agentes: ${e1.message}. ¿Has ejecutado la migración 0007?`);
-  const equipo = (agentes ?? [])
+    .returns<FilaAgente[]>();
+  if (error) throw new Error(`No se pudieron leer los agentes: ${error.message}. ¿Has ejecutado la migración 0007?`);
+  return (data ?? [])
     .filter((a) => a.activo !== false && ORDEN_DESPACHOS.includes(a.despacho))
     .sort((a, b) => ORDEN_DESPACHOS.indexOf(a.despacho) - ORDEN_DESPACHOS.indexOf(b.despacho));
+}
 
-  const ids = equipo.map((a) => a.id);
-  const { data: estados, error: e2 } = ids.length
-    ? await db
-        .from("publicaciones")
-        .select("agente_id, estado, actualizado_en")
-        .in("agente_id", ids)
-        .returns<{ agente_id: string; estado: EstadoPublicacion; actualizado_en: string }[]>()
-    : { data: [], error: null };
-  if (e2) throw new Error(`No se pudieron leer las publicaciones: ${e2.message}`);
-
-  // Reparto del Director (sin la migración 0010 no hay tareas ni estos estados: todo a cero).
-  const [{ data: tareas }, { data: activos }] = await Promise.all([
-    db.from("tareas").select("agente_id").eq("estado", "pendiente").returns<{ agente_id: string }[]>(),
+/** Lo que cambia mientras se trabaja: publicaciones, tareas, encargos activos, cola y avisos. Todo a la vez. */
+async function consultarActividad() {
+  const db = supabase();
+  // Sin la migración 0010 no hay tareas ni estos estados: todo a cero (no se lanza error).
+  const [publicaciones, tareas, activos, cola, avisos, ultimoEncargo, ultimaTarea] = await Promise.all([
+    db
+      .from("publicaciones")
+      .select("agente_id, estado, actualizado_en")
+      .returns<{ agente_id: string; estado: EstadoPublicacion; actualizado_en: string }[]>(),
+    db.from("tareas").select("agente_id, estado").in("estado", ["pendiente"]).returns<{ agente_id: string; estado: string }[]>(),
     db
       .from("encargos")
-      .select("estado, aviso")
+      .select("estado, aviso, edificio_id, actualizado_en")
       .in("estado", ["en_curso", "error", "esperando_respuesta"])
-      .returns<{ estado: "en_curso" | "error" | "esperando_respuesta"; aviso: string | null }[]>(),
+      .order("actualizado_en")
+      .returns<{ estado: "en_curso" | "error" | "esperando_respuesta"; aviso: string | null; edificio_id: string; actualizado_en: string }[]>(),
+    // Recuentos con GET (limit 1): las peticiones HEAD dieron algún pico de varios segundos.
+    db.from("encargos").select("id", { count: "exact" }).eq("estado", "en_cola").limit(1),
+    db.from("avisos").select("id", { count: "exact" }).eq("leido", false).limit(1),
+    // Para saber si algo ha cambiado (refresco ligero): lo último que se ha tocado.
+    db.from("encargos").select("actualizado_en").order("actualizado_en", { ascending: false }).limit(1).returns<{ actualizado_en: string }[]>(),
+    db.from("tareas").select("actualizado_en").order("actualizado_en", { ascending: false }).limit(1).returns<{ actualizado_en: string }[]>(),
   ]);
-  const enError = (activos ?? []).find((e) => e.estado === "error");
+  if (publicaciones.error) throw new Error(`No se pudieron leer las publicaciones: ${publicaciones.error.message}`);
+
+  const filas = activos.data ?? [];
+  const enError = filas.find((e) => e.estado === "error");
   const reparto: ResumenReparto = {
-    enCurso: (activos ?? []).some((e) => e.estado === "en_curso"),
-    esperando: (activos ?? []).filter((e) => e.estado === "esperando_respuesta").length,
+    enCurso: filas.some((e) => e.estado === "en_curso"),
+    esperando: filas.filter((e) => e.estado === "esperando_respuesta").length,
     error: enError ? (enError.aviso?.startsWith(MENSAJE_LIMITE) ? "Límite de la IA: reintenta" : "Error al repartir") : null,
   };
+  const enCola = cola.count ?? 0;
+  return {
+    publicaciones: publicaciones.data ?? [],
+    tareas: tareas.data ?? [],
+    reparto,
+    enCola,
+    avisosSinLeer: avisos.count ?? 0,
+    /** Proyecto del encargo en curso (su cartel cuelga en Dirección), o null. */
+    proyectoEnCurso: filas.find((e) => e.estado === "en_curso")?.edificio_id ?? null,
+    /** Hay que seguir mirando: el Director trabaja o hay cola que puede empezar. */
+    activo: reparto.enCurso || (enCola > 0 && !reparto.error),
+    ultimoCambio: [ultimoEncargo.data?.[0]?.actualizado_en, ultimaTarea.data?.[0]?.actualizado_en].join("|"),
+  };
+}
 
+type Actividad = Awaited<ReturnType<typeof consultarActividad>>;
+
+/** Cada agente con el recuento de sus publicaciones, sus tareas y (el Director) el reparto. */
+function conEstados(equipo: FilaAgente[], actividad: Actividad): AgenteConEstado[] {
+  return equipo.map((a) => {
+    const suyas = actividad.publicaciones.filter((p) => p.agente_id === a.id);
+    return {
+      ...a,
+      estados: contarEstados(suyas),
+      sinVer: a.visto_en
+        ? suyas.filter((p) => p.estado === "publicada" && Date.parse(p.actualizado_en) > Date.parse(a.visto_en!)).length
+        : 0,
+      tareasPendientes: actividad.tareas.filter((t) => t.agente_id === a.id && t.estado === "pendiente").length,
+      ...(a.despacho === "direccion" && a.tipo === "direccion" ? { reparto: actividad.reparto } : {}),
+    };
+  });
+}
+
+/**
+ * Huella de todo lo que se ve: luces y textos de los agentes, cola, avisos, cartel y el último cambio
+ * en encargos y tareas. Si no cambia, no hace falta volver a cargar la página.
+ */
+function firmaDe(agentes: AgenteConEstado[], actividad: Actividad): string {
+  return JSON.stringify([
+    agentes.map((a) => {
+      const e = estadoAgente(a, a.despacho === "direccion" ? actividad.enCola : 0);
+      return [a.id, e.luz, e.texto];
+    }),
+    actividad.enCola,
+    actividad.avisosSinLeer,
+    actividad.proyectoEnCurso,
+    actividad.ultimoCambio,
+  ]);
+}
+
+/** La oficina: proyectos activos, el equipo con sus estados, la cola, los avisos y la huella. Una sola ronda de consultas. */
+export async function cargarOficina(): Promise<DatosOficina> {
+  const [proyectos, equipo, actividad, avisos] = await Promise.all([
+    cargarProyectos(),
+    consultarEquipo("*"),
+    consultarActividad(),
+    cargarAvisos().catch((): Aviso[] => []),
+  ]);
+  const agentes = conEstados(equipo, actividad);
   return {
     proyectos,
-    hayEnCurso: reparto.enCurso,
-    agentes: equipo.map((a) => {
-      const suyas = (estados ?? []).filter((p) => p.agente_id === a.id);
-      return {
-        ...a,
-        estados: contarEstados(suyas),
-        sinVer: a.visto_en
-          ? suyas.filter((p) => p.estado === "publicada" && Date.parse(p.actualizado_en) > Date.parse(a.visto_en!)).length
-          : 0,
-        tareasPendientes: (tareas ?? []).filter((t) => t.agente_id === a.id).length,
-        ...(a.despacho === "direccion" && a.tipo === "direccion" ? { reparto } : {}),
-      };
-    }),
+    agentes,
+    avisos,
+    enCola: actividad.enCola,
+    proyectoEnCurso: actividad.proyectoEnCurso,
+    hayEnCurso: actividad.activo,
+    firma: firmaDe(agentes, actividad),
   };
+}
+
+/** Resumen ligero para el refresco automático: solo la huella y si hay que seguir mirando. */
+export async function cargarEstadoOficina(): Promise<{ firma: string; activo: boolean }> {
+  const [equipo, actividad] = await Promise.all([
+    consultarEquipo("id, nombre, despacho, tipo, activo, aviso_ia, visto_en, creado_en"),
+    consultarActividad(),
+  ]);
+  return { firma: firmaDe(conEstados(equipo, actividad), actividad), activo: actividad.activo };
 }
 
 /** Avisos sin leer, del más reciente al más antiguo. */

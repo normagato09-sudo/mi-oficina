@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { NOMBRE_DESPACHO, type AgenteConEstado } from "@/lib/datos";
+import type { AgenteConEstado } from "@/lib/datos";
+import { NOMBRE_DESPACHO } from "@/lib/despachos";
 import EditorTexto from "./EditorTexto";
 
 /** Panel de la carpeta "Equipo" de la estantería del Director: el perfil de cada agente. */

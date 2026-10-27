@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { extractText, getDocumentProxy } from "unpdf";
 import { supabase } from "./supabase";
 import { MAX_ADJUNTOS, MAX_BYTES_ADJUNTO, MAX_CARACTERES_ENCARGO, TIPOS_ADJUNTO, esTipoAdjunto, type EstadoEncargo } from "./encargos-reglas";
-import type { Agente, Edificio } from "./tipos";
+import type { Agente } from "./tipos";
 
 export const BUCKET_ENCARGOS = "encargos";
 
@@ -217,43 +217,37 @@ export async function crearEncargo({ director, proyectoId, texto, urgente, subid
 
 /* ───────────── Leer la cola ───────────── */
 
-/** Firma las miniaturas y pone nombre y color al proyecto de cada encargo. */
-async function paraMostrar(encargos: Encargo[]): Promise<EncargoVista[]> {
-  const db = supabase();
-  const rutas = encargos.flatMap((e) => e.adjuntos.flatMap((a) => (a.tipo === "imagen" ? [a.ruta] : [])));
-  const idsProyecto = [...new Set(encargos.map((e) => e.edificio_id))];
+/**
+ * Columnas de un encargo para mostrarlo: con su proyecto y sus tareas en la MISMA consulta
+ * (joins de PostgREST), para no hacer más viajes a la base de datos.
+ */
+const SELECT_VISTA = "*, edificios(nombre, color), tareas(id, agente_id, instrucciones, estado, creado_en, agentes(nombre))";
 
+type FilaVista = Encargo & {
+  edificios: { nombre: string; color: string } | null;
+  tareas: (Pick<Tarea, "id" | "agente_id" | "instrucciones" | "estado" | "creado_en"> & { agentes: { nombre: string } | null })[] | null;
+};
+
+/** Firma las miniaturas (una sola petición, solo si hay imágenes) y da forma a cada encargo. */
+async function paraMostrar(encargos: FilaVista[]): Promise<EncargoVista[]> {
+  const rutas = encargos.flatMap((e) => e.adjuntos.flatMap((a) => (a.tipo === "imagen" ? [a.ruta] : [])));
   const urls = new Map<string, string>();
   if (rutas.length) {
     // Miniaturas: URLs firmadas (el bucket es privado), válidas una hora.
-    const { data: firmadas } = await db.storage.from(BUCKET_ENCARGOS).createSignedUrls(rutas, 3600);
+    const { data: firmadas } = await supabase().storage.from(BUCKET_ENCARGOS).createSignedUrls(rutas, 3600);
     for (const f of firmadas ?? []) if (f.path && f.signedUrl) urls.set(f.path, f.signedUrl);
   }
-  const { data: proyectos } = idsProyecto.length
-    ? await db.from("edificios").select("id, nombre, color").in("id", idsProyecto).returns<Pick<Edificio, "id" | "nombre" | "color">[]>()
-    : { data: [] };
-  const porId = new Map((proyectos ?? []).map((p) => [p.id, p]));
 
-  // A quién se ha repartido cada encargo (sin la migración 0010 la tabla no existe: sin tareas).
-  const { data: tareas } = encargos.length
-    ? await db
-        .from("tareas")
-        .select("id, encargo_id, agente_id, instrucciones, estado, agentes(nombre)")
-        .in("encargo_id", encargos.map((e) => e.id))
-        .order("creado_en")
-        .returns<(Pick<Tarea, "id" | "encargo_id" | "agente_id" | "instrucciones" | "estado"> & { agentes: { nombre: string } | null })[]>()
-    : { data: [] };
-
-  return encargos.map((e) => ({
+  return encargos.map(({ edificios, tareas, ...e }) => ({
     ...e,
     adjuntos: e.adjuntos.map((a) =>
       a.tipo === "imagen"
         ? { ...a, url: urls.get(a.ruta) ?? null }
         : { tipo: "pdf" as const, nombre: a.nombre, paginas: a.paginas, caracteres: a.texto.length },
     ),
-    proyecto: { nombre: porId.get(e.edificio_id)?.nombre ?? "Proyecto", color: porId.get(e.edificio_id)?.color ?? "#8a93ad" },
-    tareas: (tareas ?? [])
-      .filter((t) => t.encargo_id === e.id)
+    proyecto: { nombre: edificios?.nombre ?? "Proyecto", color: edificios?.color ?? "#8a93ad" },
+    tareas: [...(tareas ?? [])]
+      .sort((a, b) => a.creado_en.localeCompare(b.creado_en))
       .map((t) => ({ id: t.id, agente_id: t.agente_id, instrucciones: t.instrucciones, estado: t.estado, agente: t.agentes?.nombre ?? "Agente" })),
   }));
 }
@@ -262,12 +256,12 @@ async function paraMostrar(encargos: Encargo[]): Promise<EncargoVista[]> {
 export async function cargarCola(): Promise<EncargoVista[]> {
   const { data, error } = await supabase()
     .from("encargos")
-    .select("*")
+    .select(SELECT_VISTA)
     .eq("estado", "en_cola")
     .order("urgente", { ascending: false })
     .order("orden")
     .order("id")
-    .returns<Encargo[]>();
+    .returns<FilaVista[]>();
   if (error) throw new Error(`No se pudo leer la cola: ${error.message}. ¿Has ejecutado la migración 0007?`);
   return paraMostrar(data ?? []);
 }
@@ -276,10 +270,10 @@ export async function cargarCola(): Promise<EncargoVista[]> {
 export async function cargarActivos(): Promise<EncargoVista[]> {
   const { data, error } = await supabase()
     .from("encargos")
-    .select("*")
+    .select(SELECT_VISTA)
     .in("estado", ["en_curso", "error", "esperando_respuesta"] satisfies EstadoEncargo[])
     .order("actualizado_en")
-    .returns<Encargo[]>();
+    .returns<FilaVista[]>();
   // Sin la migración 0010 estos estados no existen: no hay nada activo.
   if (error) return [];
   return paraMostrar(data ?? []);
@@ -289,42 +283,13 @@ export async function cargarActivos(): Promise<EncargoVista[]> {
 export async function cargarHistorial(limite = 20): Promise<EncargoVista[]> {
   const { data, error } = await supabase()
     .from("encargos")
-    .select("*")
+    .select(SELECT_VISTA)
     .not("estado", "in", "(en_cola,en_curso,error,esperando_respuesta)")
     .order("actualizado_en", { ascending: false })
     .limit(limite)
-    .returns<Encargo[]>();
+    .returns<FilaVista[]>();
   if (error) throw new Error(`No se pudieron leer los encargos: ${error.message}`);
   return paraMostrar(data ?? []);
-}
-
-/** Cuántos encargos hay en cola y de qué proyecto es el primero (para la mesa del Director). */
-export async function resumenCola(): Promise<{ total: number; primerProyecto: string | null }> {
-  const { data, count, error } = await supabase()
-    .from("encargos")
-    .select("edificio_id", { count: "exact" })
-    .eq("estado", "en_cola")
-    .order("urgente", { ascending: false })
-    .order("orden")
-    .order("id")
-    .limit(1)
-    .returns<{ edificio_id: string }[]>();
-  // Sin la migración 0007 no hay cola: la oficina se ve igual, con la bandeja vacía.
-  if (error) return { total: 0, primerProyecto: null };
-  return { total: count ?? 0, primerProyecto: data?.[0]?.edificio_id ?? null };
-}
-
-/** Proyecto del encargo que el Director tiene en curso (el que empezó antes), o null si no hay ninguno. */
-export async function proyectoEnCurso(): Promise<string | null> {
-  const { data, error } = await supabase()
-    .from("encargos")
-    .select("edificio_id")
-    .eq("estado", "en_curso")
-    .order("actualizado_en")
-    .limit(1)
-    .returns<{ edificio_id: string }[]>();
-  if (error) return null;
-  return data?.[0]?.edificio_id ?? null;
 }
 
 /* ───────────── Cambiar la cola (solo encargos que aún no han empezado) ───────────── */
@@ -372,28 +337,18 @@ export type TareaVista = Pick<Tarea, "id" | "instrucciones" | "creado_en"> & { e
 
 /** Tareas pendientes de un agente, de la más antigua a la más reciente, con el proyecto y los adjuntos de su encargo. */
 export async function cargarTareasPendientes(agenteId: string): Promise<TareaVista[]> {
-  const db = supabase();
-  const { data: tareas, error } = await db
+  // La tarea con su encargo (y el proyecto y las tareas de este) en una sola consulta.
+  const { data: tareas, error } = await supabase()
     .from("tareas")
-    .select("*")
+    .select(`*, encargos(${SELECT_VISTA})`)
     .eq("agente_id", agenteId)
     .eq("estado", "pendiente" satisfies EstadoTarea)
     .order("creado_en")
-    .returns<Tarea[]>();
+    .returns<(Tarea & { encargos: FilaVista | null })[]>();
   if (error) throw new Error(`No se pudieron leer las tareas: ${error.message}. ¿Has ejecutado la migración 0010?`);
-  if (!tareas?.length) return [];
-
-  const { data: encargos, error: e2 } = await db
-    .from("encargos")
-    .select("*")
-    .in("id", [...new Set(tareas.map((t) => t.encargo_id))])
-    .returns<Encargo[]>();
-  if (e2) throw new Error(`No se pudieron leer los encargos: ${e2.message}`);
-  const porId = new Map((await paraMostrar(encargos ?? [])).map((e) => [e.id, e]));
-  return tareas.flatMap((t) => {
-    const encargo = porId.get(t.encargo_id);
-    return encargo ? [{ id: t.id, instrucciones: t.instrucciones, creado_en: t.creado_en, encargo }] : [];
-  });
+  const conEncargo = (tareas ?? []).filter((t) => t.encargos);
+  const encargos = await paraMostrar(conEncargo.map((t) => t.encargos!));
+  return conEncargo.map((t, i) => ({ id: t.id, instrucciones: t.instrucciones, creado_en: t.creado_en, encargo: encargos[i]! }));
 }
 
 /**
