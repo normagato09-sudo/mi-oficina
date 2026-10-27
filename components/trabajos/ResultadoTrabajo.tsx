@@ -5,7 +5,7 @@ import { toPng } from "html-to-image";
 import Cartel from "@/components/carteles/Cartel";
 import { PLANTILLAS, TAMANOS, type CartelDiseñador, type MarcaCartel } from "@/lib/carteles";
 import type { EncargoVista } from "@/lib/encargos";
-import { textoDeResultado, type Resultado, type Riesgo } from "@/lib/trabajos";
+import { textoDeResultado, type Prioridad, type Resultado, type ResultadoMejoras, type Riesgo } from "@/lib/trabajos";
 
 type Props = {
   resultado: Resultado;
@@ -222,6 +222,76 @@ function Lista({ titulo, items }: { titulo: string; items: string[] }) {
   );
 }
 
+const COLOR_PRIORIDAD: Record<Prioridad, string> = { alta: COLOR_RIESGO.alto, media: COLOR_RIESGO.medio, baja: COLOR_RIESGO.bajo };
+
+/** Tabla con desplazamiento horizontal si no cabe en la ficha. */
+function Tabla({ columnas, filas, titulo }: { columnas: string[]; filas: string[][]; titulo?: string }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-line">
+      <table className="w-full min-w-max text-left text-sm">
+        {titulo && <caption className="border-b border-line bg-panel-2 px-3 py-1.5 text-left text-xs font-semibold text-muted">{titulo}</caption>}
+        <thead className="bg-panel-2 text-xs text-muted">
+          <tr>
+            {columnas.map((c, i) => (
+              <th key={i} scope="col" className="px-3 py-1.5 font-semibold">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((f, i) => (
+            <tr key={i} className="border-t border-line align-top">
+              {columnas.map((_, j) => (
+                <td key={j} className="px-3 py-1.5">
+                  {f[j] ?? ""}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Revisor de código y Web: mejoras por prioridad y piezas listas para copiar. */
+function Mejoras({ datos }: { datos: ResultadoMejoras }) {
+  return (
+    <>
+      {datos.resumen && <p className="text-sm leading-relaxed">{datos.resumen}</p>}
+      {datos.mejoras.map((m, i) => (
+        <div key={i} className={`rounded-lg border p-3 ${COLOR_PRIORIDAD[m.prioridad]}`}>
+          <p className="text-xs font-bold uppercase tracking-wide">Prioridad {m.prioridad}</p>
+          <p className="mt-0.5 font-semibold">{m.titulo}</p>
+          <p className="mt-1 text-sm leading-relaxed">{m.explicacion}</p>
+          {m.solucion && <p className="mt-1 text-sm leading-relaxed">Cómo: {m.solucion}</p>}
+        </div>
+      ))}
+      {datos.piezas.map((p, i) => (
+        <div key={i} className="overflow-hidden rounded-lg border border-line">
+          <div className="flex items-center justify-between gap-2 border-b border-line bg-panel-2 px-3 py-1.5">
+            <span className="text-xs text-muted">
+              {p.titulo}
+              {p.lenguaje && p.lenguaje !== "texto" && ` · ${p.lenguaje}`}
+            </span>
+            <BotonCopiar texto={p.contenido} />
+          </div>
+          {p.lenguaje && p.lenguaje !== "texto" ? (
+            <pre className="max-h-80 overflow-auto bg-ink p-3 text-xs leading-relaxed">
+              <code>{p.contenido}</code>
+            </pre>
+          ) : (
+            <div className="bg-ink/60 p-3">
+              <TextoConFormato texto={p.contenido} />
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
 /** El resultado de un agente bien presentado según su tipo, con su botón "Copiar". */
 export default function ResultadoTrabajo({ resultado, encargo, textoEditado, alDescargarCartel }: Props) {
   // Si edité el texto entero (código, informes…), se ve mi versión con formato.
@@ -368,6 +438,140 @@ export default function ResultadoTrabajo({ resultado, encargo, textoEditado, alD
         </div>
       );
     }
+    case "planificacion":
+      return (
+        <div className="flex flex-col gap-3">
+          {resultado.datos.titulo && <p className="font-display font-extrabold">{resultado.datos.titulo}</p>}
+          <Tabla
+            columnas={["Fecha", "Red", "Formato", "Tema", "Objetivo", "Responsable"]}
+            filas={resultado.datos.publicaciones.map((p) => [p.fecha, p.red, p.formato, p.tema, p.objetivo, p.responsable])}
+          />
+          <div className="flex">{copiarTodo}</div>
+        </div>
+      );
+    case "comunidad":
+      return (
+        <div className="flex flex-col gap-3">
+          {resultado.datos.respuestas.map((x, i) => (
+            <div key={i} className="rounded-lg border border-line bg-ink/60 p-3">
+              <p className="text-xs text-muted">
+                {x.canal && `${x.canal} · `}
+                {x.mensaje}
+              </p>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed">{x.respuesta}</p>
+              {x.faltan.length > 0 && (
+                <div className="mt-2">
+                  <Lista titulo="Falta" items={x.faltan} />
+                </div>
+              )}
+              <div className="mt-2 flex">
+                <BotonCopiar texto={x.respuesta} etiqueta="Copiar respuesta" />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    case "revision":
+    case "web":
+      return (
+        <div className="flex flex-col gap-3">
+          <Mejoras datos={resultado.datos} />
+          <div className="flex">{copiarTodo}</div>
+        </div>
+      );
+    case "agenda":
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="rounded-lg border border-line bg-ink/60 p-3">
+            <p className="font-display font-extrabold">{resultado.datos.asunto || "Reunión"}</p>
+            {resultado.datos.duracion && <p className="text-sm text-muted">Duración: {resultado.datos.duracion}</p>}
+          </div>
+          {resultado.datos.participantes.length > 0 && (
+            <Tabla columnas={["Participante", "Fecha y hora", "Zona horaria"]} filas={resultado.datos.participantes.map((p) => [p.nombre, p.fecha_hora, p.zona_horaria])} />
+          )}
+          {resultado.datos.orden_del_dia.length > 0 && <Lista titulo="Orden del día" items={resultado.datos.orden_del_dia} />}
+          {resultado.datos.convocatoria && (
+            <div className="rounded-lg border border-line bg-ink/60 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Convocatoria</p>
+              <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">{resultado.datos.convocatoria}</p>
+              <div className="mt-2 flex">
+                <BotonCopiar texto={resultado.datos.convocatoria} etiqueta="Copiar convocatoria" />
+              </div>
+            </div>
+          )}
+          {resultado.datos.faltan.length > 0 && <Lista titulo="Datos que faltan" items={resultado.datos.faltan} />}
+          <div className="flex">{copiarTodo}</div>
+        </div>
+      );
+    case "rrhh": {
+      const d = resultado.datos;
+      return (
+        <div className="flex flex-col gap-3">
+          <div className="rounded-lg border border-line bg-ink/60 p-3">
+            <p className="text-xs text-muted">{{ vacante: "Oferta de vacante", candidatura: "Resumen de candidatura", mensaje: "Mensaje para el candidato" }[d.clase]}</p>
+            {d.titulo && <p className="mb-2 font-display text-lg font-extrabold">{d.titulo}</p>}
+            <TextoConFormato texto={d.texto} />
+          </div>
+          {d.clase === "candidatura" && (
+            <>
+              <Lista titulo="Puntos fuertes" items={d.puntos_fuertes} />
+              <Lista titulo="Dudas" items={d.dudas} />
+              {d.encaja && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted">¿Encaja?</p>
+                  <p className="mt-1 text-sm leading-relaxed">{d.encaja}</p>
+                </div>
+              )}
+              <Lista titulo="Preguntas para la entrevista" items={d.preguntas} />
+            </>
+          )}
+          <div className="flex">{copiarTodo}</div>
+        </div>
+      );
+    }
+    case "estrategia":
+      return (
+        <div className="flex flex-col gap-3">
+          {resultado.datos.resumen && <p className="text-sm leading-relaxed">{resultado.datos.resumen}</p>}
+          {resultado.datos.opciones.map((o, i) => (
+            <div key={i} className="rounded-lg border border-line bg-ink/60 p-3">
+              <p className="font-display font-extrabold">{o.opcion}</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <Lista titulo="Pros" items={o.pros} />
+                <Lista titulo="Contras" items={o.contras} />
+              </div>
+            </div>
+          ))}
+          {resultado.datos.recomendacion && (
+            <div className="rounded-lg border border-accent/50 bg-accent/10 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Recomendación</p>
+              <p className="mt-1 text-sm leading-relaxed">{resultado.datos.recomendacion}</p>
+            </div>
+          )}
+          {resultado.datos.proximos_pasos.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Próximos pasos</p>
+              <ol className="mt-1 list-decimal pl-5 text-sm leading-relaxed">
+                {resultado.datos.proximos_pasos.map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ol>
+            </div>
+          )}
+          <div className="flex">{copiarTodo}</div>
+        </div>
+      );
+    case "finanzas":
+      return (
+        <div className="flex flex-col gap-3">
+          {resultado.datos.resumen && <p className="text-sm leading-relaxed">{resultado.datos.resumen}</p>}
+          {resultado.datos.tablas.map((t, i) => (
+            <Tabla key={i} titulo={t.titulo} columnas={t.columnas} filas={t.filas} />
+          ))}
+          {resultado.datos.avisos.length > 0 && <Lista titulo="Avisos" items={resultado.datos.avisos} />}
+          <div className="flex">{copiarTodo}</div>
+        </div>
+      );
     case "informes":
       return (
         <div className="flex flex-col gap-4">

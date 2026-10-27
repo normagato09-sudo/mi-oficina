@@ -45,7 +45,8 @@ const abajo = (i: number): Sala => ({
 });
 
 /** Fila de arriba: Dirección (la más grande), Redes, Traducción y Redacción. Fila de abajo: los otros cinco. */
-const SALAS: Record<Exclude<Despacho, "jefatura">, Sala> = {
+// Los agentes de los despachos nuevos (0014) solo están en el juego.
+const SALAS = {
   direccion: { x: 24, y: Y_ARRIBA, ancho: 446, puerta: 360 },
   redes: { x: 482, y: Y_ARRIBA, ancho: 290, puerta: 24 },
   traduccion: { x: 784, y: Y_ARRIBA, ancho: 290, puerta: 24 },
@@ -55,7 +56,7 @@ const SALAS: Record<Exclude<Despacho, "jefatura">, Sala> = {
   secretaria: abajo(2),
   diseno: abajo(3),
   informes: abajo(4),
-};
+} satisfies Partial<Record<Despacho, Sala>>;
 
 type Props = {
   datos: DatosOficina;
@@ -91,6 +92,14 @@ const ASPECTOS: Record<Despacho, Aspecto> = {
   secretaria: { camiseta: "#8e5aa8", sombra: "#6e4386", pelo: "#3b2a20", piel: "#e8b894", peinado: "largo" },
   diseno: { camiseta: "#e07b39", sombra: "#b8602a", pelo: "#c0392b", piel: "#f1c7a1", peinado: "largo" },
   informes: { camiseta: "#3c8d5a", sombra: "#2c6c44", pelo: "#8a8a8a", piel: "#8d5a3b", peinado: "corto" },
+  planificacion: { camiseta: "#d9a441", sombra: "#b3832c", pelo: "#2a1d17", piel: "#c68a5e", peinado: "mono" },
+  comunidad: { camiseta: "#5fb3a1", sombra: "#46907f", pelo: "#e0b23a", piel: "#f1c7a1", peinado: "largo" },
+  revision: { camiseta: "#5a5f73", sombra: "#43475a", pelo: "#6b3e26", piel: "#e8b894", peinado: "corto" },
+  web: { camiseta: "#7b61c9", sombra: "#5f4aa3", pelo: "#1c1714", piel: "#8d5a3b", peinado: "mono" },
+  rrhh: { camiseta: "#e2738c", sombra: "#bf566f", pelo: "#8a4b2a", piel: "#f1c7a1", peinado: "largo" },
+  agenda: { camiseta: "#3f7fbf", sombra: "#2f6397", pelo: "#c9a26b", piel: "#f1c7a1", peinado: "corto" },
+  estrategia: { camiseta: "#2f4f4f", sombra: "#203838", pelo: "#9a9a9a", piel: "#a8744f", peinado: "corto", corbata: "#c9a227" },
+  finanzas: { camiseta: "#6b8f3a", sombra: "#52702b", pelo: "#3b2a20", piel: "#e8b894", peinado: "largo" },
   jefatura: { camiseta: "#4a4f63", sombra: "#363a4a", pelo: "#3b2a20", piel: "#e8b894", peinado: "corto" },
 };
 
@@ -220,7 +229,7 @@ function xPuesto(i: number, total: number, ancho: number): number {
 
 /** Despacho con paredes de cristal, ventana y puerta al pasillo. */
 function DespachoSala({ despacho, agentes, children }: { despacho: keyof typeof SALAS; agentes: number; children: ReactNode }) {
-  const { x, y, ancho, puerta, abajo } = SALAS[despacho];
+  const { x, y, ancho, puerta, abajo }: Sala = SALAS[despacho];
   return (
     <div
       className={`despacho despacho-${despacho}${abajo ? " despacho-abajo" : ""}`}

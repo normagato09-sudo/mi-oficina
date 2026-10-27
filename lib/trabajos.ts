@@ -6,7 +6,6 @@ import { CAMPOS, ESQUEMA_CARTEL, PLANTILLAS, TAMANOS, leerCartel, type CartelDis
 import type { EsquemaJSON } from "./ia";
 import type { Despacho } from "./tipos";
 
-/** Despachos que trabajan en tareas (todos menos Dirección). */
 /** Despachos que hacen tareas: todos menos Dirección y las jefaturas (que aún no trabajan). */
 export type DespachoTrabajo = Exclude<Despacho, "direccion" | "jefatura">;
 
@@ -24,6 +23,14 @@ export const ENTREGAS: Record<DespachoTrabajo, string> = {
   secretaria: "La ficha de un alumno (nombre, Discord, país, correo, cumpleaños, cursos) y la lista de datos que faltan.",
   informes:
     "Un informe por proyecto con lo hecho, lo pendiente, lo que espera a la CEO y 3 prioridades. Recibe los datos reales de los encargos y las tareas de los últimos 7 días.",
+  planificacion: "Un calendario de publicaciones en tabla: fecha, red social, formato, tema, objetivo y quién del equipo lo hace. Solo usa los eventos y fechas que le dan.",
+  comunidad: "Una respuesta por cada mensaje, comentario o duda (de redes, Discord o correo), lista para copiar, con los datos que falten señalados. No envía nada.",
+  revision: "Una lista de problemas o mejoras del código, cada uno con prioridad (alta, media o baja), explicación sencilla y cómo arreglarlo, y el código corregido listo para copiar.",
+  web: "Una lista de mejoras para la web con prioridad (alta, media o baja) y los textos de cada sección listos para copiar (estructura, llamadas a la acción, SEO básico y accesibilidad).",
+  agenda: "Una propuesta de reunión: fecha y hora para cada participante en su zona horaria, duración, orden del día y mensaje de convocatoria. Pregunta lo que falte.",
+  rrhh: "Una oferta de vacante, el resumen de una candidatura (puntos fuertes, dudas, si encaja y preguntas para la entrevista) o un mensaje para un candidato. No contacta a nadie.",
+  estrategia: "Un análisis con opciones, pros y contras de cada una, una recomendación razonada y los próximos pasos concretos.",
+  finanzas: "Tablas con las cuentas (gastos, ingresos, presupuestos o previsiones) y un resumen, con avisos si algo no cuadra o falta un dato. Nunca inventa cifras.",
 };
 
 export function esDespachoTrabajo(despacho: string | null | undefined): despacho is DespachoTrabajo {
@@ -47,6 +54,44 @@ export type ResultadoInforme = {
   prioridades: string[];
 };
 
+export type Prioridad = "alta" | "media" | "baja";
+export type ResultadoCalendario = {
+  titulo: string;
+  publicaciones: { fecha: string; red: string; formato: string; tema: string; objetivo: string; responsable: string }[];
+};
+export type ResultadoRespuestas = { respuestas: { mensaje: string; canal: string; respuesta: string; faltan: string[] }[] };
+/** Revisor de código y Web: mejoras con prioridad y piezas (textos o código) listas para copiar. */
+export type ResultadoMejoras = {
+  resumen: string;
+  mejoras: { titulo: string; prioridad: Prioridad; explicacion: string; solucion: string }[];
+  piezas: { titulo: string; lenguaje: string; contenido: string }[];
+};
+export type ResultadoReunion = {
+  asunto: string;
+  duracion: string;
+  participantes: { nombre: string; zona_horaria: string; fecha_hora: string }[];
+  orden_del_dia: string[];
+  convocatoria: string;
+  faltan: string[];
+};
+export type ResultadoRRHH = {
+  clase: "vacante" | "candidatura" | "mensaje";
+  titulo: string;
+  /** La oferta o el mensaje (Markdown sencillo); en una candidatura, un resumen corto. */
+  texto: string;
+  puntos_fuertes: string[];
+  dudas: string[];
+  encaja: string;
+  preguntas: string[];
+};
+export type ResultadoEstrategia = {
+  resumen: string;
+  opciones: { opcion: string; pros: string[]; contras: string[] }[];
+  recomendacion: string;
+  proximos_pasos: string[];
+};
+export type ResultadoFinanzas = { resumen: string; tablas: { titulo: string; columnas: string[]; filas: string[][] }[]; avisos: string[] };
+
 /** Resultado guardado en la tarea (columna resultado_json). */
 export type Resultado =
   | { tipo: "redes"; datos: ResultadoInstagram }
@@ -56,7 +101,15 @@ export type Resultado =
   | { tipo: "programacion"; datos: ResultadoCodigo }
   | { tipo: "ciberseguridad"; datos: ResultadoSeguridad }
   | { tipo: "secretaria"; datos: ResultadoAlumno }
-  | { tipo: "informes"; datos: ResultadoInforme };
+  | { tipo: "informes"; datos: ResultadoInforme }
+  | { tipo: "planificacion"; datos: ResultadoCalendario }
+  | { tipo: "comunidad"; datos: ResultadoRespuestas }
+  | { tipo: "revision"; datos: ResultadoMejoras }
+  | { tipo: "web"; datos: ResultadoMejoras }
+  | { tipo: "agenda"; datos: ResultadoReunion }
+  | { tipo: "rrhh"; datos: ResultadoRRHH }
+  | { tipo: "estrategia"; datos: ResultadoEstrategia }
+  | { tipo: "finanzas"; datos: ResultadoFinanzas };
 
 /* ───────────── Esquemas (modo estricto: todo obligatorio, sin propiedades extra) ───────────── */
 
@@ -71,6 +124,30 @@ const objeto = (properties: Record<string, object>, description?: string) => ({
 });
 
 const NOTA = texto("Nota corta para la CEO: qué has hecho y por qué (1 o 2 frases).");
+const PRIORIDAD = { type: "string", enum: ["alta", "media", "baja"] };
+
+/** Revisor de código y Web comparten forma. */
+const esquemaMejoras = (pieza: string) =>
+  objeto({
+    resumen: texto("Resumen en una o dos frases."),
+    mejoras: lista(
+      objeto({
+        titulo: texto(),
+        prioridad: PRIORIDAD,
+        explicacion: texto("Qué pasa y por qué importa, en palabras sencillas."),
+        solucion: texto("Cómo arreglarlo o mejorarlo."),
+      }),
+      "Problemas o mejoras, de más a menos importante.",
+    ),
+    piezas: lista(
+      objeto({
+        titulo: texto("Para qué es (sección de la web, archivo…)."),
+        lenguaje: texto("Lenguaje del código (javascript, html…) o «texto» si es un texto."),
+        contenido: texto(pieza),
+      }),
+      "Textos o código listos para copiar (vacía si no hacen falta).",
+    ),
+  });
 
 const ESQUEMAS_DATOS: Record<DespachoTrabajo, object> = {
   redes: objeto({
@@ -131,6 +208,69 @@ const ESQUEMAS_DATOS: Record<DespachoTrabajo, object> = {
       }),
     ),
     prioridades: lista(texto(), "Exactamente 3 prioridades."),
+  }),
+  planificacion: objeto({
+    titulo: texto("Proyecto y periodo del calendario."),
+    publicaciones: lista(
+      objeto({
+        fecha: texto("Fecha (y hora si la hay)."),
+        red: texto("Red social o canal."),
+        formato: texto("Carrusel, reel, historia, publicación, mensaje…"),
+        tema: texto(),
+        objetivo: texto(),
+        responsable: texto("Quién del equipo lo hace (Redactor, Diseñador, Instagram…)."),
+      }),
+      "Una fila por publicación, en orden de fecha.",
+    ),
+  }),
+  comunidad: objeto({
+    respuestas: lista(
+      objeto({
+        mensaje: texto("El mensaje original, resumido en una frase."),
+        canal: texto("Instagram, Discord, correo…"),
+        respuesta: texto("La respuesta completa, lista para copiar."),
+        faltan: lista(texto(), "Datos que harían falta para responder bien (vacía si no falta nada)."),
+      }),
+      "Una respuesta por mensaje.",
+    ),
+  }),
+  revision: esquemaMejoras("El código corregido completo, listo para copiar."),
+  web: esquemaMejoras("El texto de la sección o el código, listo para copiar."),
+  agenda: objeto({
+    asunto: texto(),
+    duracion: texto("Duración de la reunión."),
+    participantes: lista(
+      objeto({ nombre: texto(), zona_horaria: texto("Zona horaria (p. ej. Europe/Madrid)."), fecha_hora: texto("Fecha y hora de la reunión en su zona horaria.") }),
+    ),
+    orden_del_dia: lista(texto()),
+    convocatoria: texto("Mensaje de convocatoria listo para copiar."),
+    faltan: lista(texto(), "Datos que faltan y hay que preguntar (vacía si no falta nada)."),
+  }),
+  rrhh: objeto({
+    clase: { type: "string", enum: ["vacante", "candidatura", "mensaje"], description: "Qué entregas." },
+    titulo: texto("Puesto, candidato o asunto."),
+    texto: texto("La oferta o el mensaje completo (Markdown sencillo). En una candidatura, un resumen corto."),
+    puntos_fuertes: lista(texto(), "Solo candidatura (si no, vacía)."),
+    dudas: lista(texto(), "Solo candidatura (si no, vacía)."),
+    encaja: texto("Solo candidatura: si encaja con el puesto y por qué (si no, vacío)."),
+    preguntas: lista(texto(), "Solo candidatura: preguntas para la entrevista (si no, vacía)."),
+  }),
+  estrategia: objeto({
+    resumen: texto("La situación en pocas frases."),
+    opciones: lista(objeto({ opcion: texto(), pros: lista(texto()), contras: lista(texto()) })),
+    recomendacion: texto("Tu recomendación razonada y honesta."),
+    proximos_pasos: lista(texto(), "Próximos pasos concretos."),
+  }),
+  finanzas: objeto({
+    resumen: texto("Resumen claro de las cuentas."),
+    tablas: lista(
+      objeto({
+        titulo: texto(),
+        columnas: lista(texto()),
+        filas: lista(lista(texto()), "Cada fila, con un valor por columna."),
+      }),
+    ),
+    avisos: lista(texto(), "Cosas que no cuadran o datos que faltan (vacía si no hay)."),
   }),
 };
 
@@ -211,6 +351,97 @@ export function leerResultado(despacho: DespachoTrabajo, crudo: unknown): { resu
         },
       };
     }
+    case "planificacion":
+      return {
+        nota,
+        resultado: {
+          tipo: "planificacion",
+          datos: {
+            titulo: str(d.titulo),
+            publicaciones: objs(d.publicaciones).map((p) => ({
+              fecha: str(p.fecha),
+              red: str(p.red),
+              formato: str(p.formato),
+              tema: str(p.tema),
+              objetivo: str(p.objetivo),
+              responsable: str(p.responsable),
+            })),
+          },
+        },
+      };
+    case "comunidad":
+      return {
+        nota,
+        resultado: {
+          tipo: "comunidad",
+          datos: { respuestas: objs(d.respuestas).map((r) => ({ mensaje: str(r.mensaje), canal: str(r.canal), respuesta: str(r.respuesta), faltan: strs(r.faltan) })) },
+        },
+      };
+    case "revision":
+    case "web":
+      return { nota, resultado: { tipo: despacho, datos: leerMejoras(d) } };
+    case "agenda":
+      return {
+        nota,
+        resultado: {
+          tipo: "agenda",
+          datos: {
+            asunto: str(d.asunto),
+            duracion: str(d.duracion),
+            participantes: objs(d.participantes).map((p) => ({ nombre: str(p.nombre), zona_horaria: str(p.zona_horaria), fecha_hora: str(p.fecha_hora) })),
+            orden_del_dia: strs(d.orden_del_dia),
+            convocatoria: str(d.convocatoria),
+            faltan: strs(d.faltan),
+          },
+        },
+      };
+    case "rrhh":
+      return {
+        nota,
+        resultado: {
+          tipo: "rrhh",
+          datos: {
+            clase: (["vacante", "candidatura", "mensaje"] as const).find((c) => c === d.clase) ?? "mensaje",
+            titulo: str(d.titulo),
+            texto: str(d.texto),
+            puntos_fuertes: strs(d.puntos_fuertes),
+            dudas: strs(d.dudas),
+            encaja: str(d.encaja),
+            preguntas: strs(d.preguntas),
+          },
+        },
+      };
+    case "estrategia":
+      return {
+        nota,
+        resultado: {
+          tipo: "estrategia",
+          datos: {
+            resumen: str(d.resumen),
+            opciones: objs(d.opciones).map((o) => ({ opcion: str(o.opcion), pros: strs(o.pros), contras: strs(o.contras) })),
+            recomendacion: str(d.recomendacion),
+            proximos_pasos: strs(d.proximos_pasos),
+          },
+        },
+      };
+    case "finanzas":
+      return {
+        nota,
+        resultado: {
+          tipo: "finanzas",
+          datos: {
+            resumen: str(d.resumen),
+            tablas: objs(d.tablas).map((t) => ({
+              titulo: str(t.titulo),
+              columnas: strs(t.columnas),
+              filas: (Array.isArray(t.filas) ? t.filas : [])
+                .filter((f): f is unknown[] => Array.isArray(f))
+                .map((f) => f.map((v) => (typeof v === "number" ? String(v) : str(v)))),
+            })),
+            avisos: strs(d.avisos),
+          },
+        },
+      };
     case "informes":
       return {
         nota,
@@ -225,7 +456,30 @@ export function leerResultado(despacho: DespachoTrabajo, crudo: unknown): { resu
   }
 }
 
+function leerMejoras(d: Record<string, unknown>): ResultadoMejoras {
+  return {
+    resumen: str(d.resumen),
+    mejoras: objs(d.mejoras).map((m) => ({
+      titulo: str(m.titulo),
+      prioridad: (["alta", "media", "baja"] as const).find((p) => p === m.prioridad) ?? "media",
+      explicacion: str(m.explicacion),
+      solucion: str(m.solucion),
+    })),
+    piezas: objs(d.piezas).map((p) => ({ titulo: str(p.titulo), lenguaje: str(p.lenguaje), contenido: typeof p.contenido === "string" ? p.contenido : "" })),
+  };
+}
+
 const vinetas = (items: string[]) => items.map((i) => `- ${i}`).join("\n");
+const numerada = (items: string[]) => items.map((p, i) => `${i + 1}. ${p}`).join("\n");
+
+/** Tabla en texto (Markdown). */
+function tablaTexto(columnas: string[], filas: string[][]): string {
+  const fila = (celdas: string[]) => `| ${celdas.map((c) => c.replace(/\|/g, "/")).join(" | ")} |`;
+  return [fila(columnas), fila(columnas.map(() => "---")), ...filas.map(fila)].join("\n");
+}
+
+/** Une las partes no vacías con una línea en blanco. */
+const juntar = (partes: string[]) => partes.filter(Boolean).join("\n\n");
 
 /** El resultado en texto plano: para que el Director lo revise y para el botón "Copiar". */
 export function textoDeResultado(r: Resultado): string {
@@ -268,6 +522,60 @@ export function textoDeResultado(r: Resultado): string {
         r.datos.faltan.length ? `\nFaltan:\n${vinetas(r.datos.faltan)}` : "",
       ].join("\n");
     }
+    case "planificacion":
+      return juntar([
+        r.datos.titulo ? `# ${r.datos.titulo}` : "",
+        tablaTexto(
+          ["Fecha", "Red", "Formato", "Tema", "Objetivo", "Responsable"],
+          r.datos.publicaciones.map((p) => [p.fecha, p.red, p.formato, p.tema, p.objetivo, p.responsable]),
+        ),
+      ]);
+    case "comunidad":
+      return juntar(
+        r.datos.respuestas.map(
+          (x, i) => `## ${i + 1}. ${x.canal ? `[${x.canal}] ` : ""}${x.mensaje}\n${x.respuesta}${x.faltan.length ? `\n\nFalta:\n${vinetas(x.faltan)}` : ""}`,
+        ),
+      );
+    case "revision":
+    case "web":
+      return juntar([
+        r.datos.resumen,
+        ...r.datos.mejoras.map((m) => `[${m.prioridad.toUpperCase()}] ${m.titulo}\n${m.explicacion}\nCómo: ${m.solucion}`),
+        ...r.datos.piezas.map((p) =>
+          p.lenguaje && p.lenguaje !== "texto" ? `${p.titulo}\n\`\`\`${p.lenguaje}\n${p.contenido}\n\`\`\`` : `## ${p.titulo}\n${p.contenido}`,
+        ),
+      ]);
+    case "agenda":
+      return juntar([
+        `# ${r.datos.asunto || "Reunión"}`,
+        r.datos.duracion ? `Duración: ${r.datos.duracion}` : "",
+        r.datos.participantes.length ? `Participantes:\n${vinetas(r.datos.participantes.map((p) => `${p.nombre}: ${p.fecha_hora} (${p.zona_horaria})`))}` : "",
+        r.datos.orden_del_dia.length ? `Orden del día:\n${numerada(r.datos.orden_del_dia)}` : "",
+        r.datos.convocatoria ? `Convocatoria:\n${r.datos.convocatoria}` : "",
+        r.datos.faltan.length ? `Falta:\n${vinetas(r.datos.faltan)}` : "",
+      ]);
+    case "rrhh":
+      return juntar([
+        r.datos.titulo ? `# ${r.datos.titulo}` : "",
+        r.datos.texto,
+        r.datos.puntos_fuertes.length ? `Puntos fuertes:\n${vinetas(r.datos.puntos_fuertes)}` : "",
+        r.datos.dudas.length ? `Dudas:\n${vinetas(r.datos.dudas)}` : "",
+        r.datos.encaja ? `¿Encaja? ${r.datos.encaja}` : "",
+        r.datos.preguntas.length ? `Preguntas para la entrevista:\n${numerada(r.datos.preguntas)}` : "",
+      ]);
+    case "estrategia":
+      return juntar([
+        r.datos.resumen,
+        ...r.datos.opciones.map((o) => `## ${o.opcion}\nPros:\n${vinetas(o.pros) || "- —"}\nContras:\n${vinetas(o.contras) || "- —"}`),
+        r.datos.recomendacion ? `## Recomendación\n${r.datos.recomendacion}` : "",
+        r.datos.proximos_pasos.length ? `## Próximos pasos\n${numerada(r.datos.proximos_pasos)}` : "",
+      ]);
+    case "finanzas":
+      return juntar([
+        r.datos.resumen,
+        ...r.datos.tablas.map((t) => `## ${t.titulo}\n${tablaTexto(t.columnas, t.filas)}`),
+        r.datos.avisos.length ? `Avisos:\n${vinetas(r.datos.avisos)}` : "",
+      ]);
     case "informes":
       return [
         ...r.datos.proyectos.map(

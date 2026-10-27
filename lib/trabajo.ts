@@ -143,6 +143,11 @@ const INDICACIONES: Partial<Record<DespachoTrabajo, string>> = {
     "Usa la plantilla \"foto\" solo si hay una imagen adjunta (y pon su número en \"foto\"); si no, pon -1. Rellena solo los textos de la plantilla que elijas y deja los demás vacíos. Textos cortos: el título, pocas palabras.",
   informes: "Usa solo los datos reales de la oficina que te paso; si no hay datos de un proyecto, dilo. Termina con exactamente 3 prioridades.",
   secretaria: "Si falta un dato imprescindible, déjalo vacío en la ficha y añádelo a \"faltan\"; nunca lo inventes.",
+  planificacion: "Usa solo los eventos y fechas del encargo y de la ficha del proyecto; si no bastan, propón temas sin inventar eventos y dilo en tu nota.",
+  comunidad: "Una respuesta por cada mensaje que te pasen. Si falta un dato para responder, ponlo en \"faltan\" y no lo inventes.",
+  agenda: "Si no te dan la fecha, la duración, los participantes o su zona horaria, no lo supongas: déjalo vacío y añádelo a \"faltan\".",
+  rrhh: "Elige en \"clase\" qué entregas. Si no es una candidatura, deja vacías las listas de candidatura y \"encaja\". Nunca juzgues por edad, origen, género ni nada que no tenga que ver con el puesto.",
+  finanzas: "Usa solo las cifras que te dan; si falta una, ponlo en \"avisos\" en vez de inventarla. Cada fila con un valor por columna.",
 };
 
 function instruccionesTrabajo(despacho: DespachoTrabajo): string {

@@ -34,7 +34,16 @@ export type Despacho =
   | "secretaria"
   | "diseno"
   | "informes"
-  /** Jefe de una planta (migración 0013): de momento no trabaja. */
+  // Migración 0014:
+  | "planificacion"
+  | "comunidad"
+  | "revision"
+  | "web"
+  | "rrhh"
+  | "agenda"
+  | "estrategia"
+  | "finanzas"
+  /** Jefe de una planta (migración 0013): de momento no trabaja (oculto). */
   | "jefatura";
 
 export type Departamento = {
@@ -53,7 +62,7 @@ export type Agente = {
   /** Planta del edificio (migración 0013; si falta, la de su despacho: ver lib/plantas.ts). */
   planta?: number | null;
   nombre: string;
-  tipo: "redes" | "direccion" | "comunicacion" | "administracion" | "rrhh" | Despacho;
+  tipo: "redes" | "direccion" | "comunicacion" | "administracion" | Despacho;
   instrucciones: string;
   creado_en: string;
   /** Última vez que se abrió su ficha (migración 0003; puede faltar si aún no se ha ejecutado). */

@@ -11,6 +11,14 @@ export const NOMBRE_DESPACHO: Record<Despacho, string> = {
   secretaria: "Secretaría",
   diseno: "Diseño",
   informes: "Informes",
+  planificacion: "Planificación de contenido",
+  comunidad: "Atención a la comunidad",
+  revision: "Revisión de código",
+  web: "Web",
+  rrhh: "Recursos humanos",
+  agenda: "Agenda",
+  estrategia: "Estrategia",
+  finanzas: "Finanzas",
   jefatura: "Jefatura",
 };
 
