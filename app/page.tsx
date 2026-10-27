@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { after, connection } from "next/server";
 import AutoRefresco from "@/components/AutoRefresco";
 import Header from "@/components/Header";
+import VistaOficina from "@/components/juego/VistaOficina";
 import Oficina, { estiloAgente, letreroDe } from "@/components/oficina/Oficina";
 import PanelFicha from "@/components/ficha/PanelFicha";
 import { SinFicha } from "@/components/ficha/navegacion";
@@ -9,7 +11,7 @@ import PanelProyectos from "@/components/panel/PanelProyectos";
 import { avanzarCola } from "@/lib/cola";
 import { cargarAprendizajesEquipo } from "@/lib/aprendizajes";
 import { cargarOficina, cargarTodosLosProyectos, type DatosOficina } from "@/lib/datos";
-import { plural } from "@/lib/estado";
+import { estadoAgente, plural } from "@/lib/estado";
 import type { Edificio } from "@/lib/tipos";
 
 /** La cola del Director corre en segundo plano (after) en la página y en sus acciones: hasta 60 s. */
@@ -17,7 +19,9 @@ export const maxDuration = 60;
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   await connection();
-  const params = await searchParams;
+  const [params, galletas] = await Promise.all([searchParams, cookies()]);
+  // La última vista elegida (juego o clásica); la primera vez, el juego.
+  const vista = galletas.get("vista")?.value === "clasica" ? "clasica" : "juego";
   // La ficha de un agente se abre y se cierra en el navegador (PanelFicha): aquí solo importa para no abrir otros paneles.
   const hayFicha = typeof params.agente === "string";
   const panel = hayFicha ? undefined : params.panel;
@@ -68,16 +72,32 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <Header directorId={director?.id} avisos={datos.avisos} proyectosAbierto={panel === "proyectos"} />
       <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-6 py-4">
         <main className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <h1 className="font-display text-xl font-extrabold tracking-tight">Mi Oficina</h1>
-            <p className="text-sm text-muted">
-              {plural(datos.agentes.length, "agente", "agentes")} · trabajando para{" "}
-              {datos.proyectos.length === 1 ? datos.proyectos[0]!.nombre : plural(datos.proyectos.length, "proyecto", "proyectos")}
-            </p>
-          </div>
-          <div className="mt-3">
-            <Oficina datos={datos} enCola={datos.enCola} proyectoCartel={proyectoCartel} equipoAbierto={equipoAbierto} />
-          </div>
+          <VistaOficina
+            inicial={vista}
+            titulo={
+              <div className="flex flex-wrap items-baseline gap-x-3">
+                <h1 className="font-display text-xl font-extrabold tracking-tight">Mi Oficina</h1>
+                <p className="text-sm text-muted">
+                  {plural(datos.agentes.length, "agente", "agentes")} · trabajando para{" "}
+                  {datos.proyectos.length === 1 ? datos.proyectos[0]!.nombre : plural(datos.proyectos.length, "proyecto", "proyectos")}
+                </p>
+              </div>
+            }
+            clasica={<Oficina datos={datos} enCola={datos.enCola} proyectoCartel={proyectoCartel} equipoAbierto={equipoAbierto} />}
+            agentes={datos.agentes.map((a) => {
+              const estado = estadoAgente(a, a.despacho === "direccion" ? datos.enCola : 0);
+              return {
+                id: a.id,
+                nombre: a.nombre,
+                despacho: a.despacho,
+                luz: estado.luz,
+                texto: estado.texto,
+                trabajando: estado.trabajando,
+                inactivo: estado.inactivo,
+                aspecto: estiloAgente(a, corbata).aspecto,
+              };
+            })}
+          />
         </main>
 
         <SinFicha>
