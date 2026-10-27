@@ -46,6 +46,14 @@ export class IAError extends Error {
   }
 }
 
+/** La IA generó un JSON que no cumple el esquema (Groq: json_validate_failed). Se reintenta una vez. */
+class EsquemaIAError extends IAError {
+  constructor(mensaje: string) {
+    super(mensaje);
+    this.name = "EsquemaIAError";
+  }
+}
+
 // Groq: mejor modelo gratuito de producción con tool calling y salidas estructuradas estrictas,
 // y el modelo con visión que también admite salidas estrictas (está en "preview").
 const GROQ_MODELO = "openai/gpt-oss-120b";
@@ -77,7 +85,17 @@ export async function generarTexto(peticion: PeticionIA): Promise<string> {
  * `nombre` identifica el formato (letras, números y guiones bajos).
  */
 export async function generarEstructurado<T>(peticion: PeticionIA & { nombre: string; esquema: EsquemaJSON }): Promise<T> {
-  const texto = proveedorIA() === "anthropic" ? await anthropicEstructurado(peticion) : await groqEstructurado(peticion);
+  let texto: string;
+  if (proveedorIA() === "anthropic") texto = await anthropicEstructurado(peticion);
+  else {
+    try {
+      texto = await groqEstructurado(peticion);
+    } catch (e) {
+      // A veces el modelo genera un JSON que no cumple el esquema: suele salir bien a la segunda.
+      if (!(e instanceof EsquemaIAError)) throw e;
+      texto = await groqEstructurado(peticion);
+    }
+  }
   try {
     return JSON.parse(texto) as T;
   } catch {
@@ -125,6 +143,9 @@ async function llamarGroq(cuerpo: Record<string, unknown>): Promise<string> {
     if (respuesta.status === 429 || error?.error?.code === "rate_limit_exceeded") {
       const espera = Number(respuesta.headers.get("retry-after"));
       throw new LimiteIAError(Number.isFinite(espera) && espera > 0 ? espera : undefined);
+    }
+    if (error?.error?.code === "json_validate_failed") {
+      throw new EsquemaIAError(`La IA devolvió una respuesta que no cumple el formato pedido: ${error.error.message ?? ""}`);
     }
     throw new IAError(`Groq respondió ${respuesta.status}: ${error?.error?.message ?? respuesta.statusText}`);
   }

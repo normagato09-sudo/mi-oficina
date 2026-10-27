@@ -41,12 +41,13 @@ export const TEXTO_ESTADO_ENCARGO: Record<EstadoEncargo, string> = {
   cancelado: "Cancelado",
 };
 
-export const TEXTO_ESTADO_TAREA: Record<"pendiente" | "en_curso" | "revision" | "revisando" | "revisada" | "lista" | "error", string> = {
+export const TEXTO_ESTADO_TAREA: Record<"pendiente" | "en_curso" | "revision" | "revisando" | "revisada" | "lista" | "aprobada" | "error", string> = {
   pendiente: "Pendiente",
   en_curso: "Trabajando…",
   revision: "Esperando revisión",
   revisando: "El Director lo revisa…",
   revisada: "Revisada",
   lista: "Lista",
+  aprobada: "Aprobada",
   error: "Error",
 };

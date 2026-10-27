@@ -11,6 +11,10 @@ type Props = {
   resultado: Resultado;
   /** El encargo de la tarea: sus imágenes (Instagram, Diseñador) y su proyecto (colores del cartel). */
   encargo: EncargoVista;
+  /** Texto editado por la CEO (resultados sin campos propios): se muestra en lugar del original. */
+  textoEditado?: string | null;
+  /** Solo el Diseñador: el botón pasa a ser "Descargar PNG y aprobar" y esto se llama tras descargar. */
+  alDescargarCartel?: () => Promise<void>;
 };
 
 /** Botón "Copiar" (texto al portapapeles) con confirmación. */
@@ -113,7 +117,7 @@ function nombreArchivo(...partes: string[]): string {
 }
 
 /** El cartel ya montado con su plantilla, los colores del proyecto y (si la lleva) la foto adjunta. */
-function CartelListo({ cartel, encargo }: { cartel: CartelDiseñador; encargo: EncargoVista }) {
+function CartelListo({ cartel, encargo, alDescargar }: { cartel: CartelDiseñador; encargo: EncargoVista; alDescargar?: () => Promise<void> }) {
   const nodo = useRef<HTMLDivElement>(null);
   const [foto, setFoto] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<{ error?: boolean; texto: string } | null>(null);
@@ -162,6 +166,7 @@ function CartelListo({ cartel, encargo }: { cartel: CartelDiseñador; encargo: E
       enlace.download = nombreArchivo(marca.nombre, PLANTILLAS[cartel.plantilla], `${ancho}x${alto}`);
       enlace.click();
       setMensaje({ texto: "Cartel descargado." });
+      await alDescargar?.();
     } catch (e) {
       setMensaje({ error: true, texto: `No se pudo crear el PNG (${e instanceof Error ? e.message : String(e)}).` });
     } finally {
@@ -181,7 +186,7 @@ function CartelListo({ cartel, encargo }: { cartel: CartelDiseñador; encargo: E
       </div>
       <div className="flex items-center gap-3">
         <button type="button" className="btn-primary" onClick={descargar} disabled={ocupado || (Boolean(urlFoto) && !foto)}>
-          {ocupado ? "Un momento…" : "Descargar PNG"}
+          {ocupado ? "Un momento…" : alDescargar ? "Descargar PNG y aprobar" : "Descargar PNG"}
         </button>
         <p role="status" aria-live="polite" className={`text-sm ${mensaje?.error ? "text-red-400" : "text-muted"}`}>
           {mensaje?.texto}
@@ -218,7 +223,20 @@ function Lista({ titulo, items }: { titulo: string; items: string[] }) {
 }
 
 /** El resultado de un agente bien presentado según su tipo, con su botón "Copiar". */
-export default function ResultadoTrabajo({ resultado, encargo }: Props) {
+export default function ResultadoTrabajo({ resultado, encargo, textoEditado, alDescargarCartel }: Props) {
+  // Si edité el texto entero (código, informes…), se ve mi versión con formato.
+  if (textoEditado) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="rounded-lg border border-line bg-ink/60 p-3">
+          <TextoConFormato texto={textoEditado} />
+        </div>
+        <div className="flex">
+          <BotonCopiar texto={textoEditado} />
+        </div>
+      </div>
+    );
+  }
   const copiarTodo = <BotonCopiar texto={textoDeResultado(resultado)} />;
   switch (resultado.tipo) {
     case "redes": {
@@ -259,7 +277,7 @@ export default function ResultadoTrabajo({ resultado, encargo }: Props) {
       );
     }
     case "diseno":
-      return <CartelListo cartel={resultado.datos} encargo={encargo} />;
+      return <CartelListo cartel={resultado.datos} encargo={encargo} alDescargar={alDescargarCartel} />;
     case "traduccion":
       return (
         <div className="flex flex-col gap-3">

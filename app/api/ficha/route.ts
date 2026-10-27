@@ -12,8 +12,9 @@ export async function GET(request: NextRequest) {
   if (tipo !== "director" && tipo !== "diseno" && tipo !== "agente") return Response.json({ error: "Tipo de ficha no válido." }, { status: 400 });
   try {
     const datos = await cargarFicha(agenteId, tipo);
-    // Abrir la ficha cuenta como "visto" (su luz verde se apaga): no hace esperar a la respuesta.
-    after(() => marcarVisto(agenteId));
+    // Abrir la ficha (no cada vez que se refresca) cuenta como "visto": su luz verde se apaga.
+    // No hace esperar a la respuesta.
+    if (request.nextUrl.searchParams.get("abrir") === "1") after(() => marcarVisto(agenteId));
     return Response.json(datos, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

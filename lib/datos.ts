@@ -9,7 +9,7 @@ import type { IdiomaProyecto } from "./idiomas";
 export type AgenteConEstado = Agente & {
   despacho: Despacho;
   estados: Record<EstadoPublicacion, number>;
-  /** Publicaciones publicadas después de la última vez que se abrió su ficha. */
+  /** Publicaciones publicadas o trabajos aprobados después de la última vez que se abrió su ficha (luz verde). */
   sinVer: number;
   /** Sus tareas, por paso (pendientes, trabajando, en revisión, listas). */
   tareas: ResumenTareas;
@@ -119,7 +119,8 @@ async function consultarEquipo(columnas: string): Promise<FilaAgente[]> {
 async function consultarActividad() {
   const db = supabase();
   // Sin la migración 0010 no hay tareas ni estos estados: todo a cero (no se lanza error).
-  const [publicaciones, tareasRes, activos, cola, avisos, ultimoEncargo, ultimaTarea] = await Promise.all([
+  const hace14Dias = new Date(Date.now() - 14 * 24 * 3600_000).toISOString();
+  const [publicaciones, tareasRes, activos, cola, avisos, ultimoEncargo, ultimaTarea, aprobadas] = await Promise.all([
     db
       .from("publicaciones")
       .select("agente_id, estado, actualizado_en")
@@ -141,6 +142,13 @@ async function consultarActividad() {
     // Para saber si algo ha cambiado (refresco ligero): lo último que se ha tocado.
     db.from("encargos").select("actualizado_en").order("actualizado_en", { ascending: false }).limit(1).returns<{ actualizado_en: string }[]>(),
     db.from("tareas").select("actualizado_en").order("actualizado_en", { ascending: false }).limit(1).returns<{ actualizado_en: string }[]>(),
+    // Trabajos que he aprobado hace poco: el agente se ve en verde hasta que vuelvo a abrir su ficha.
+    db
+      .from("tareas")
+      .select("agente_id, aprobada_en")
+      .eq("estado", "aprobada")
+      .gte("aprobada_en", hace14Dias)
+      .returns<{ agente_id: string; aprobada_en: string }[]>(),
   ]);
   if (publicaciones.error) throw new Error(`No se pudieron leer las publicaciones: ${publicaciones.error.message}`);
 
@@ -157,6 +165,7 @@ async function consultarActividad() {
   return {
     publicaciones: publicaciones.data ?? [],
     tareas,
+    aprobadas: aprobadas.data ?? [],
     reparto,
     enCola,
     avisosSinLeer: avisos.count ?? 0,
@@ -189,9 +198,11 @@ function conEstados(equipo: FilaAgente[], actividad: Actividad): AgenteConEstado
     return {
       ...a,
       estados: contarEstados(suyas),
-      sinVer: a.visto_en
-        ? suyas.filter((p) => p.estado === "publicada" && Date.parse(p.actualizado_en) > Date.parse(a.visto_en!)).length
-        : 0,
+      sinVer:
+        (a.visto_en
+          ? suyas.filter((p) => p.estado === "publicada" && Date.parse(p.actualizado_en) > Date.parse(a.visto_en!)).length
+          : 0) +
+        actividad.aprobadas.filter((t) => t.agente_id === a.id && (!a.visto_en || Date.parse(t.aprobada_en) > Date.parse(a.visto_en))).length,
       tareas: resumenTareas(actividad.tareas.filter((t) => t.agente_id === a.id)),
       ...(a.despacho === "direccion" && a.tipo === "direccion" ? { reparto: actividad.reparto } : {}),
     };

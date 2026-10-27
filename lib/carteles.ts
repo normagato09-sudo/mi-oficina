@@ -78,13 +78,18 @@ export const ESQUEMA_CARTEL = {
   properties: {
     plantilla: { type: "string", enum: Object.keys(PLANTILLAS), description: "convocatoria, frase o foto (solo si hay una imagen adjunta)" },
     tamano: { type: "string", enum: Object.keys(TAMANOS), description: "cuadrado (1080×1080) o vertical (1080×1350)" },
+    // Lista de pares campo–valor: así solo pone los de su plantilla (con un objeto, el modo estricto
+    // exige todos los campos y la IA a veces se salta los que no usa).
     textos: {
-      type: "object",
-      additionalProperties: false,
-      required: CLAVES_TEXTOS,
+      type: "array",
       description:
-        "Rellena solo los campos de la plantilla elegida (convocatoria: titulo, subtitulo, fecha, hora, lugar, llamada; frase: frase, contexto; foto: titulo, texto) y deja los demás vacíos. Textos cortos y legibles; nunca inventes datos.",
-      properties: Object.fromEntries(CLAVES_TEXTOS.map((clave) => [clave, { type: "string" }])),
+        "Los textos de la plantilla elegida (convocatoria: titulo, subtitulo, fecha, hora, lugar, llamada; frase: frase, contexto; foto: titulo, texto). Textos cortos y legibles; nunca inventes datos.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["campo", "valor"],
+        properties: { campo: { type: "string", enum: CLAVES_TEXTOS }, valor: { type: "string" } },
+      },
     },
     foto: { type: "integer", description: "Número de la imagen adjunta que va de fondo (0 = la primera) en la plantilla foto; -1 si no lleva foto." },
     explicacion: { type: "string", description: "Breve explicación de las decisiones de diseño" },
@@ -98,7 +103,18 @@ export function leerCartel(valor: unknown): CartelDiseñador {
   const plantilla = v.plantilla;
   if (typeof plantilla !== "string" || !(plantilla in PLANTILLAS)) throw new Error("Plantilla de cartel desconocida.");
   const tamano = typeof v.tamano === "string" && v.tamano in TAMANOS ? (v.tamano as Tamano) : "cuadrado";
-  const crudos = (typeof v.textos === "object" && v.textos !== null ? v.textos : {}) as Record<string, unknown>;
+  // Acepta los textos como objeto { campo: valor } o como lista de pares [{ campo, valor }] (respuesta de la IA).
+  const crudos = (
+    Array.isArray(v.textos)
+      ? Object.fromEntries(
+          v.textos.flatMap((p: unknown) =>
+            typeof p === "object" && p !== null && typeof (p as { campo?: unknown }).campo === "string" ? [[(p as { campo: string }).campo, (p as { valor?: unknown }).valor]] : [],
+          ),
+        )
+      : typeof v.textos === "object" && v.textos !== null
+        ? v.textos
+        : {}
+  ) as Record<string, unknown>;
   const textos: Record<string, string> = {};
   for (const campo of CAMPOS[plantilla as Plantilla]) {
     const t = crudos[campo.clave];

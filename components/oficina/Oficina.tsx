@@ -163,6 +163,9 @@ function ObjetosMesa({ despacho, enCola }: { despacho: Despacho; enCola: number 
   }
 }
 
+/** Letras que caben en una burbuja de una línea dentro del despacho más estrecho. */
+const MAX_LETRAS_BURBUJA = 24;
+
 /** Puesto de trabajo: personaje, mesa y objetos. Es un enlace que abre la ficha del agente. */
 function Puesto({ agente, x, enCola, corbata }: { agente: AgenteConEstado; x: number; enCola: number; corbata: string }) {
   const estado = estadoAgente(agente, enCola);
@@ -175,9 +178,13 @@ function Puesto({ agente, x, enCola, corbata }: { agente: AgenteConEstado; x: nu
       className={`puesto puesto-${tipo} marca-${marca} luz-${estado.luz}${estado.trabajando ? " trabajando" : ""}`}
       style={{ left: x, top: Y_PUESTO }}
     >
-      <span className={`burbuja${estado.texto.length > 28 ? " burbuja-larga" : ""}`} aria-hidden="true">
+      {/* Si no cabe entera, solo el punto y el nombre; el estado aparece al pasar el ratón (o con el foco). */}
+      <span className={`burbuja${`${agente.nombre} · ${estado.texto}`.length > MAX_LETRAS_BURBUJA ? " burbuja-compacta" : ""}`} aria-hidden="true">
         <span className="punto" style={{ background: COLOR_LUZ[estado.luz] }} />
-        <span>{`${agente.nombre} · ${estado.texto}`}</span>
+        <span>
+          {agente.nombre}
+          <span className="burbuja-estado"> · {estado.texto}</span>
+        </span>
       </span>
       <span className="sombra-puesto" aria-hidden="true" />
       <span className="halo-estado" aria-hidden="true" />

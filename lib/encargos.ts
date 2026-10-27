@@ -46,9 +46,10 @@ export type Pregunta = { pregunta: string; respuesta: string | null };
 
 /**
  * pendiente → en_curso (el agente trabaja) → revision → revisando (el Director revisa)
- *   → revisada (bien, o a la tercera vuelta) → lista (todo el encargo revisado: te necesita).
+ *   → revisada (bien, o a la tercera vuelta) → lista (todo el encargo revisado: te necesita)
+ *   → aprobada (la CEO la aprueba) | vuelve a pendiente si la CEO pide cambios.
  */
-export type EstadoTarea = "pendiente" | "en_curso" | "revision" | "revisando" | "revisada" | "lista" | "error";
+export type EstadoTarea = "pendiente" | "en_curso" | "revision" | "revisando" | "revisada" | "lista" | "aprobada" | "error";
 
 /** Lo que el Director ha encargado a un agente (migración 0010). */
 export type Tarea = {
@@ -76,6 +77,15 @@ export type Tarea = {
   reintentar_en?: string | null;
   paso_hasta?: string | null;
   reintentos?: number;
+  // Revisión de la CEO (migración 0012):
+  aprobada_en?: string | null;
+  /** La versión del agente antes de que la CEO la editara. */
+  resultado_agente?: Resultado | null;
+  resultado_agente_texto?: string | null;
+  /** Texto editado por la CEO cuando el resultado no tiene campos propios (código, informes…). */
+  texto_editado?: string | null;
+  /** Comentario de la CEO al pedir cambios. */
+  comentario_ceo?: string | null;
 };
 
 /** Encargo listo para mostrar: imágenes con URL firmada, el proyecto con nombre y color y a quién se ha repartido. */
@@ -387,23 +397,50 @@ export function estaAtascado(
 
 export type TareaVista = Pick<
   Tarea,
-  "id" | "instrucciones" | "creado_en" | "estado" | "resultado_json" | "resultado" | "nota_agente" | "nota_director" | "vueltas"
+  | "id"
+  | "instrucciones"
+  | "creado_en"
+  | "estado"
+  | "resultado_json"
+  | "resultado"
+  | "nota_agente"
+  | "nota_director"
+  | "vueltas"
+  | "aprobada_en"
+  | "texto_editado"
+  | "comentario_ceo"
 > & { encargo: EncargoVista };
+
+/** Últimos trabajos aprobados que se ven (plegados) en cada ficha. */
+const MAX_APROBADOS = 10;
 
 /**
  * Tareas de un agente con su encargo (proyecto, adjuntos): las que tiene entre manos y las ya listas,
  * de la más antigua a la más reciente. Una sola consulta (más las miniaturas).
  */
 export async function cargarTareasAgente(agenteId: string): Promise<TareaVista[]> {
-  const { data: tareas, error } = await supabase()
-    .from("tareas")
-    .select(`*, encargos(${SELECT_VISTA})`)
-    .eq("agente_id", agenteId)
-    .in("estado", ["pendiente", "en_curso", "revision", "revisando", "revisada", "lista"] satisfies EstadoTarea[])
-    .order("creado_en")
-    .returns<(Tarea & { encargos: FilaVista | null })[]>();
-  if (error) throw new Error(`No se pudieron leer las tareas: ${error.message}. ¿Has ejecutado la migración 0011?`);
-  const conEncargo = (tareas ?? []).filter((t) => t.encargos);
+  const db = supabase();
+  const columnas = `*, encargos(${SELECT_VISTA})`;
+  // Las que tiene entre manos o listas y, a la vez, sus últimos trabajos aprobados.
+  const [{ data: tareas, error }, { data: aprobadas, error: e2 }] = await Promise.all([
+    db
+      .from("tareas")
+      .select(columnas)
+      .eq("agente_id", agenteId)
+      .in("estado", ["pendiente", "en_curso", "revision", "revisando", "revisada", "lista"] satisfies EstadoTarea[])
+      .order("creado_en")
+      .returns<(Tarea & { encargos: FilaVista | null })[]>(),
+    db
+      .from("tareas")
+      .select(columnas)
+      .eq("agente_id", agenteId)
+      .eq("estado", "aprobada" satisfies EstadoTarea)
+      .order("aprobada_en", { ascending: false })
+      .limit(MAX_APROBADOS)
+      .returns<(Tarea & { encargos: FilaVista | null })[]>(),
+  ]);
+  if (error || e2) throw new Error(`No se pudieron leer las tareas: ${(error ?? e2)!.message}. ¿Has ejecutado la migración 0012?`);
+  const conEncargo = [...(tareas ?? []), ...(aprobadas ?? [])].filter((t) => t.encargos);
   const encargos = await paraMostrar(conEncargo.map((t) => t.encargos!));
   return conEncargo.map((t, i) => ({
     id: t.id,
@@ -415,6 +452,9 @@ export async function cargarTareasAgente(agenteId: string): Promise<TareaVista[]
     nota_agente: t.nota_agente ?? null,
     nota_director: t.nota_director ?? null,
     vueltas: t.vueltas ?? 0,
+    aprobada_en: t.aprobada_en ?? null,
+    texto_editado: t.texto_editado ?? null,
+    comentario_ceo: t.comentario_ceo ?? null,
     encargo: encargos[i]!,
   }));
 }

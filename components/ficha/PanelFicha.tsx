@@ -38,10 +38,13 @@ export default function PanelFicha({ agentes, colores, proyectos, enCola, firma 
   // El navegador ya sabe qué agente es: así el servidor no tiene que buscarlo antes de cargar.
   const tipo = !agente ? null : agente.despacho === "direccion" && agente.tipo === "direccion" ? "director" : agente.despacho === "diseno" ? "diseno" : "agente";
 
+  // ¿Es la primera carga de esta ficha (se acaba de abrir)? Solo entonces cuenta como "vista".
+  const yaCargada = carga?.agenteId === agenteId;
+
   useEffect(() => {
     if (!agenteId || !tipo) return;
     let vigente = true;
-    fetch(`/api/ficha?agente=${encodeURIComponent(agenteId)}&tipo=${tipo}`, { cache: "no-store" })
+    fetch(`/api/ficha?agente=${encodeURIComponent(agenteId)}&tipo=${tipo}${yaCargada ? "" : "&abrir=1"}`, { cache: "no-store" })
       .then(async (r) => {
         const cuerpo = (await r.json()) as DatosFicha | { error: string };
         if (!vigente) return;
@@ -51,6 +54,8 @@ export default function PanelFicha({ agentes, colores, proyectos, enCola, firma 
     return () => {
       vigente = false;
     };
+    // yaCargada no es dependencia: cambia justo con la respuesta y no debe volver a pedirla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agenteId, tipo, firma]);
 
   if (!agente) return null;

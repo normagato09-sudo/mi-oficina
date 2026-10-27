@@ -1,4 +1,5 @@
 import "server-only";
+import { aprendizajesPara, conAprendizajes } from "./aprendizajes";
 import { contextoAgente, sistemaDeAgente } from "./datos";
 import { NOMBRE_DESPACHO } from "./despachos";
 import type { Encargo, Pregunta } from "./encargos";
@@ -132,15 +133,16 @@ function esquemaReparto(ids: string[]): EsquemaJSON {
 
 /** Una llamada a la IA: el Director lee todo y decide a quién reparte (o qué pregunta). */
 async function decidir(encargo: Encargo): Promise<Decision> {
-  const [contexto, equipo, imagenes] = await Promise.all([
+  const [contexto, equipo, imagenes, aprendizajes] = await Promise.all([
     contextoAgente(encargo.director_id, encargo.edificio_id),
     cargarEquipo(encargo.director_id),
     cargarImagenes(encargo),
+    aprendizajesPara(encargo.director_id, encargo.edificio_id),
   ]);
   if (!equipo.length) throw new IAError("No hay ningún agente activo en el equipo al que repartir.");
 
   const decision = await generarEstructurado<Decision>({
-    sistema: `${sistemaDeAgente(contexto)}\n\n${INSTRUCCIONES_REPARTO}`,
+    sistema: conAprendizajes(`${sistemaDeAgente(contexto)}\n\n${INSTRUCCIONES_REPARTO}`, aprendizajes),
     mensaje: mensajeReparto(encargo, contexto.proyecto.nombre, equipo, imagenes.length),
     imagenes,
     nombre: "reparto_director",

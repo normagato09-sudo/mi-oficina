@@ -187,15 +187,6 @@
   box-shadow: 0 2px 0 #0b0f1a, 0 6px 10px rgba(0, 0, 0, 0.25);
 }
 
-/* En despachos estrechos los avisos largos se centran para no salirse */
-.despacho .burbuja-larga {
-  left: 50%;
-  width: 270px;
-  transform: translateX(-50%);
-}
-.despacho .burbuja-larga::after {
-  left: 50%;
-}
 
 /* ───────────── Pasillo y zona de descanso ───────────── */
 
@@ -1840,19 +1831,17 @@
   border-top-color: #ffffff;
   transform: translateX(-50%);
 }
-/* Avisos largos (p. ej. límite de la IA): en dos líneas para no salirse del piso */
-.burbuja-larga {
-  left: calc(50% - 26px);
-  z-index: 9;
-  width: 330px;
-  transform: none;
-  white-space: normal;
-  border-radius: 14px;
-  font-size: max(14.5px, calc(12px / var(--escala, 1)));
-  line-height: 1.25;
+/* Burbuja que no cabe entera: solo el punto y el nombre; al pasar el ratón (o con el foco), el estado */
+.burbuja-compacta .burbuja-estado {
+  display: none;
 }
-.burbuja-larga::after {
-  left: 26px;
+.puesto:hover .burbuja-compacta,
+.puesto:focus-visible .burbuja-compacta {
+  z-index: 12;
+}
+.puesto:hover .burbuja-compacta .burbuja-estado,
+.puesto:focus-visible .burbuja-compacta .burbuja-estado {
+  display: inline;
 }
 .burbuja .punto {
   flex-shrink: 0;

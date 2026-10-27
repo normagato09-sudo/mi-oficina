@@ -1,4 +1,5 @@
 import "server-only";
+import { aprendizajesPara, conAprendizajes } from "./aprendizajes";
 import { contextoAgente, sistemaDeAgente } from "./datos";
 import type { Encargo, EstadoTarea, Tarea } from "./encargos";
 import type { EstadoEncargo } from "./encargos-reglas";
@@ -184,14 +185,20 @@ async function datosUltimaSemana(): Promise<string> {
 
 /** Una llamada a la IA: el agente hace su tarea. Devuelve cómo guardarla (pasa a revisión). */
 async function trabajar({ tarea, agente, encargo }: Contexto): Promise<() => Promise<void>> {
-  const [contexto, imagenes, semana] = await Promise.all([
+  const [contexto, imagenes, semana, aprendizajes] = await Promise.all([
     contextoAgente(agente.id, encargo.edificio_id),
     cargarImagenes(encargo),
     agente.despacho === "informes" ? datosUltimaSemana() : Promise.resolve(null),
+    aprendizajesPara(agente.id, encargo.edificio_id),
   ]);
 
   const partes = [`Instrucciones del Director para ti:\n${tarea.instrucciones}`, `Encargo original de la CEO:\n${textoEncargo(encargo, imagenes.length)}`];
   if (semana) partes.push(`Datos reales de la oficina (encargos y tareas de los últimos 7 días):\n${semana}`);
+  if (tarea.comentario_ceo) {
+    partes.push(
+      `La CEO ha revisado tu entrega y te pide cambios. Tu entrega anterior:\n${tarea.resultado.slice(0, MAX_CARACTERES_ENTREGA)}\n\nComentario de la CEO (tenlo en cuenta por encima de todo):\n${tarea.comentario_ceo}`,
+    );
+  }
   if (tarea.vueltas && tarea.comentarios) {
     partes.push(
       `El Director te ha devuelto tu entrega anterior para que la corrijas (vuelta ${tarea.vueltas} de ${MAX_VUELTAS}).\nTu entrega anterior:\n${tarea.resultado.slice(0, MAX_CARACTERES_ENTREGA)}\n\nComentarios del Director (corrige exactamente esto):\n${tarea.comentarios}`,
@@ -199,7 +206,7 @@ async function trabajar({ tarea, agente, encargo }: Contexto): Promise<() => Pro
   }
 
   const crudo = await generarEstructurado<unknown>({
-    sistema: `${sistemaDeAgente(contexto)}\n\n${instruccionesTrabajo(agente.despacho)}`,
+    sistema: conAprendizajes(`${sistemaDeAgente(contexto)}\n\n${instruccionesTrabajo(agente.despacho)}`, aprendizajes),
     mensaje: partes.join("\n\n"),
     imagenes,
     nombre: `trabajo_${agente.despacho}`,
@@ -217,6 +224,7 @@ async function trabajar({ tarea, agente, encargo }: Contexto): Promise<() => Pro
       estado: "revision" satisfies EstadoTarea,
       resultado_json: resultado,
       resultado: textoDeResultado(resultado),
+      texto_editado: null,
       nota_agente: nota || null,
       aviso: null,
       reintentos: 0,
@@ -251,10 +259,16 @@ const ESQUEMA_REVISION = {
 
 /** Una llamada a la IA: el Director revisa la entrega. Devuelve cómo guardar su decisión. */
 async function revisar({ tarea, agente, encargo, otras }: Contexto): Promise<() => Promise<void>> {
-  const contexto = await contextoAgente(encargo.director_id, encargo.edificio_id);
+  const [contexto, delDirector, delAgente] = await Promise.all([
+    contextoAgente(encargo.director_id, encargo.edificio_id),
+    aprendizajesPara(encargo.director_id, encargo.edificio_id),
+    aprendizajesPara(agente.id, encargo.edificio_id),
+  ]);
   const partes = [
     `Encargo original de la CEO (proyecto "${contexto.proyecto.nombre}"):\n${textoEncargo(encargo, 0, 2_000)}`,
     `Instrucciones que le diste a ${agente.nombre}:\n${tarea.instrucciones}`,
+    tarea.comentario_ceo ? `La CEO pidió estos cambios (comprueba que estén hechos):\n${tarea.comentario_ceo}` : "",
+    delAgente.length ? `Lo que ${agente.nombre} ha aprendido de la CEO (también debe cumplirlo):\n${delAgente.map((a) => `- ${a.texto}`).join("\n")}` : "",
     `Lo único que ${agente.nombre} puede entregar: ${ENTREGAS[agente.despacho]}\nSi tus instrucciones pedían algo fuera de esto (otros tamaños, A4, PDF, JPEG, archivos…), NO se lo reclames: valora la entrega por lo que sí puede hacer.`,
     `Lo que ha entregado ${agente.nombre}${tarea.vueltas ? ` (después de ${tarea.vueltas} ${tarea.vueltas === 1 ? "corrección" : "correcciones"})` : ""}:\n${tarea.resultado.slice(0, MAX_CARACTERES_ENTREGA)}${tarea.nota_agente ? `\n\nNota de ${agente.nombre}: ${tarea.nota_agente}` : ""}`,
   ];
@@ -268,8 +282,8 @@ async function revisar({ tarea, agente, encargo, otras }: Contexto): Promise<() 
   }
 
   const r = await generarEstructurado<Revision>({
-    sistema: `${sistemaDeAgente(contexto)}\n\n${INSTRUCCIONES_REVISION}`,
-    mensaje: partes.join("\n\n"),
+    sistema: conAprendizajes(`${sistemaDeAgente(contexto)}\n\n${INSTRUCCIONES_REVISION}`, delDirector),
+    mensaje: partes.filter(Boolean).join("\n\n"),
     nombre: "revision_director",
     esquema: ESQUEMA_REVISION,
     maxTokens: MAX_TOKENS_REVISION,
@@ -310,7 +324,8 @@ async function terminarSiTodoRevisado(encargoId: string): Promise<void> {
   const db = supabase();
   const { data: tareas, error } = await db.from("tareas").select("estado").eq("encargo_id", encargoId).returns<{ estado: EstadoTarea }[]>();
   if (error) throw new Error(`No se pudieron leer las tareas: ${error.message}`);
-  if (!tareas?.length || tareas.some((t) => t.estado !== "revisada")) return;
+  // Listo cuando no queda nada en marcha (las ya listas o aprobadas cuentan como hechas: p. ej. si pedí cambios en una).
+  if (!tareas?.some((t) => t.estado === "revisada") || tareas.some((t) => !["revisada", "lista", "aprobada"].includes(t.estado))) return;
 
   const { data: encargo, error: e2 } = await db
     .from("encargos")

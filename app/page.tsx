@@ -7,6 +7,7 @@ import { SinFicha } from "@/components/ficha/navegacion";
 import PanelProyecto from "@/components/panel/PanelProyecto";
 import PanelProyectos from "@/components/panel/PanelProyectos";
 import { avanzarCola } from "@/lib/cola";
+import { cargarAprendizajesEquipo } from "@/lib/aprendizajes";
 import { cargarOficina, cargarTodosLosProyectos, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
 import type { Edificio } from "@/lib/tipos";
@@ -23,10 +24,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   let datos: DatosOficina;
   let todosLosProyectos: Edificio[] | undefined;
+  let aprendizajes: Awaited<ReturnType<typeof cargarAprendizajesEquipo>> = {};
   let errorProyectos: string | null = null;
   try {
-    // Todo a la vez: la oficina y, si está abierto, el panel "Proyectos".
-    [datos, todosLosProyectos] = await Promise.all([
+    // Todo a la vez: la oficina y, si están abiertos, el panel "Proyectos" o la carpeta "Equipo".
+    [datos, todosLosProyectos, aprendizajes] = await Promise.all([
       cargarOficina(),
       panel === "proyectos"
         ? cargarTodosLosProyectos().catch((e: unknown) => {
@@ -34,6 +36,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
             return undefined;
           })
         : undefined,
+      panel === "equipo" ? cargarAprendizajesEquipo() : {},
     ]);
   } catch (e) {
     return (
@@ -89,7 +92,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               {errorProyectos}
             </p>
           )}
-          {equipoAbierto && <PanelProyecto agentes={datos.agentes} />}
+          {equipoAbierto && <PanelProyecto agentes={datos.agentes} aprendizajes={aprendizajes} />}
         </SinFicha>
 
         <PanelFicha
