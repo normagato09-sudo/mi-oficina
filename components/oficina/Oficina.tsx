@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import type { AgenteConEstado, DatosOficina } from "@/lib/datos";
+import { NOMBRE_DESPACHO, type AgenteConEstado, type DatosOficina } from "@/lib/datos";
 import { COLOR_LUZ, estadoAgente, plural } from "@/lib/estado";
 import { momentoEspana } from "@/lib/hora";
 import type { Despacho, Edificio } from "@/lib/tipos";
@@ -8,26 +8,52 @@ import Ambiente from "./Ambiente";
 import Lienzo from "./Lienzo";
 import Personaje, { type Aspecto } from "./Personaje";
 import {
-  AlfombraPlanta, Bandeja, Bandera, Cafetera, Cuadro, CuadroNombre, GloboTerraqueo, Lampara, LamparaColgante,
-  Mesita, Papelera, Planta, Reloj, Sofa, Ventana,
+  AlfombraPlanta, Archivador, Bandeja, Bandera, Cafetera, Calendario, Carteles, Cuadro, CuadroNombre, Escudo,
+  GloboTerraqueo, LamparaColgante, MontonPapeles, Papelera, PizarraGraficos, Planta, RackServidor, Reloj, Sofa,
+  TableroDibujo, Ventana,
 } from "./Decor";
 
-/** Tamaño de la planta (px de diseño): se escala al ancho disponible. */
-const ANCHO = 1200;
-const ALTO = 842;
+/** Tamaño de la planta (px de diseño): se escala al ancho disponible y la página se desplaza hacia abajo si hace falta. */
+const ANCHO = 1400;
+const ALTO = 922;
 
-/** Posición y tamaño de cada despacho en la planta, y dónde está su puerta (x dentro del despacho). */
-const DESPACHOS: Record<Despacho, { x: number; ancho: number; puerta: number }> = {
-  direccion: { x: 24, ancho: 540, puerta: 448 },
-  redes: { x: 576, ancho: 294, puerta: 24 },
-  traduccion: { x: 882, ancho: 294, puerta: 24 },
-};
-const Y_DESPACHOS = 24;
 const ALTO_DESPACHO = 360;
+const Y_ARRIBA = 24;
+const Y_ABAJO = 538;
 /** Centro vertical de los puestos dentro del despacho. */
 const Y_PUESTO = 214;
 
-const NOMBRE: Record<Despacho, string> = { direccion: "Dirección", redes: "Redes sociales", traduccion: "Traducción" };
+type Sala = {
+  x: number;
+  y: number;
+  ancho: number;
+  /** Posición x de la puerta dentro del despacho. */
+  puerta: number;
+  /** Fila de abajo: la puerta da al pasillo por la pared del fondo. */
+  abajo?: boolean;
+};
+
+const ANCHO_ABAJO = 260;
+const abajo = (i: number): Sala => ({
+  x: 24 + i * (ANCHO_ABAJO + 12),
+  y: Y_ABAJO,
+  ancho: i === 4 ? ANCHO_ABAJO + 4 : ANCHO_ABAJO,
+  puerta: ANCHO_ABAJO - 82,
+  abajo: true,
+});
+
+/** Fila de arriba: Dirección (la más grande), Redes, Traducción y Redacción. Fila de abajo: los otros cinco. */
+const SALAS: Record<Despacho, Sala> = {
+  direccion: { x: 24, y: Y_ARRIBA, ancho: 446, puerta: 360 },
+  redes: { x: 482, y: Y_ARRIBA, ancho: 290, puerta: 24 },
+  traduccion: { x: 784, y: Y_ARRIBA, ancho: 290, puerta: 24 },
+  redaccion: { x: 1086, y: Y_ARRIBA, ancho: 290, puerta: 24 },
+  programacion: abajo(0),
+  ciberseguridad: abajo(1),
+  secretaria: abajo(2),
+  diseno: abajo(3),
+  informes: abajo(4),
+};
 
 type Props = {
   datos: DatosOficina;
@@ -50,43 +76,93 @@ export function letreroDe(edificio: Edificio) {
   };
 }
 
-function normalizar(texto: string): string {
-  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+/** Aspecto de cada agente: uno distinto por despacho. */
+const ASPECTOS: Record<Despacho, Aspecto> = {
+  direccion: { camiseta: "#2c3e66", sombra: "#1f2c4a", pelo: "#8a8a8a", piel: "#e8b894", peinado: "corto" },
+  redes: { camiseta: "#D62976", sombra: "#a81f5c", pelo: "#3b2a20", piel: "#f1c7a1", peinado: "largo", luz: "rgba(250, 126, 180, 0.6)" },
+  traduccion: { camiseta: "#1f8a8a", sombra: "#166b6b", pelo: "#1c1714", piel: "#a8744f", peinado: "mono" },
+  redaccion: { camiseta: "#c9a227", sombra: "#a3831c", pelo: "#a0522d", piel: "#f1c7a1", peinado: "corto" },
+  programacion: { camiseta: "#2f6db5", sombra: "#245a96", pelo: "#1c1714", piel: "#d9a27a", peinado: "corto", luz: "rgba(120, 200, 255, 0.6)" },
+  ciberseguridad: { camiseta: "#2b2b2b", sombra: "#1a1a1a", pelo: "#e0b23a", piel: "#f1c7a1", peinado: "mono", luz: "rgba(95, 208, 138, 0.6)" },
+  secretaria: { camiseta: "#8e5aa8", sombra: "#6e4386", pelo: "#3b2a20", piel: "#e8b894", peinado: "largo" },
+  diseno: { camiseta: "#e07b39", sombra: "#b8602a", pelo: "#c0392b", piel: "#f1c7a1", peinado: "largo" },
+  informes: { camiseta: "#3c8d5a", sombra: "#2c6c44", pelo: "#8a8a8a", piel: "#8d5a3b", peinado: "corto" },
+};
+
+/** Aspecto del muñeco y de su pantalla según el despacho del agente. */
+export function estiloAgente(agente: AgenteConEstado, corbata: string): { aspecto: Aspecto; marca: string } {
+  const aspecto = ASPECTOS[agente.despacho];
+  if (agente.despacho === "direccion") return { marca: "direccion", aspecto: { ...aspecto, corbata } };
+  if (agente.despacho === "redes") return { marca: "instagram", aspecto };
+  return { marca: agente.despacho, aspecto };
 }
 
-const ASPECTOS_EXTRA: Aspecto[] = [
-  { camiseta: "#8e5aa8", sombra: "#6e4386", pelo: "#3b2a20", piel: "#f1c7a1", peinado: "largo" },
-  { camiseta: "#e07b39", sombra: "#b8602a", pelo: "#a0522d", piel: "#d9a27a", peinado: "corto" },
-];
-
-/** Aspecto del muñeco y de su pantalla según el agente. */
-export function estiloAgente(agente: AgenteConEstado, corbata: string, i = 0): { aspecto: Aspecto; marca: string } {
-  const n = normalizar(agente.nombre);
-  if (n.includes("instagram")) {
-    return {
-      marca: "instagram",
-      aspecto: { camiseta: "#D62976", sombra: "#a81f5c", pelo: "#3b2a20", piel: "#f1c7a1", peinado: "largo", luz: "rgba(250, 126, 180, 0.6)" },
-    };
+/** Objetos de la mesa de cada despacho (además del portátil, que algunos sustituyen). */
+function ObjetosMesa({ despacho, enCola }: { despacho: Despacho; enCola: number }) {
+  switch (despacho) {
+    case "direccion":
+      return (
+        <>
+          <Bandeja papeles={enCola} />
+          <span className="placa-mesa" />
+          <span className="telefono" />
+        </>
+      );
+    case "traduccion":
+      return (
+        <>
+          <span className="papel" />
+          <span className="libreta" />
+        </>
+      );
+    case "redaccion":
+      return (
+        <>
+          <span className="maquina-escribir">
+            <span className="hoja-maquina" />
+            <span className="teclas" />
+          </span>
+          <span className="pila-mesa" />
+        </>
+      );
+    case "programacion":
+      return (
+        <span className="monitores">
+          <span className="monitor m1" />
+          <span className="monitor m2" />
+          <span className="monitor m3" />
+        </span>
+      );
+    case "secretaria":
+      return (
+        <>
+          <span className="fichero" />
+          <span className="papel" />
+        </>
+      );
+    case "diseno":
+      return (
+        <>
+          <span className="paleta" />
+          <span className="lapices" />
+        </>
+      );
+    case "informes":
+      return (
+        <>
+          <span className="carpetas-mesa" />
+          <span className="papel" />
+        </>
+      );
+    default:
+      return <span className="papel" />;
   }
-  if (agente.tipo === "direccion") {
-    return {
-      marca: "direccion",
-      aspecto: { camiseta: "#2c3e66", sombra: "#1f2c4a", pelo: "#8a8a8a", piel: "#e8b894", peinado: "corto", corbata },
-    };
-  }
-  if (agente.tipo === "traduccion") {
-    return {
-      marca: "generico",
-      aspecto: { camiseta: "#1f8a8a", sombra: "#166b6b", pelo: "#1c1714", piel: "#a8744f", peinado: "mono" },
-    };
-  }
-  return { marca: "generico", aspecto: ASPECTOS_EXTRA[i % ASPECTOS_EXTRA.length]! };
 }
 
 /** Puesto de trabajo: personaje, mesa y objetos. Es un enlace que abre la ficha del agente. */
-function Puesto({ agente, x, i, seleccionado, enCola, corbata }: { agente: AgenteConEstado; x: number; i: number; seleccionado: boolean; enCola: number; corbata: string }) {
+function Puesto({ agente, x, seleccionado, enCola, corbata }: { agente: AgenteConEstado; x: number; seleccionado: boolean; enCola: number; corbata: string }) {
   const estado = estadoAgente(agente, enCola);
-  const { aspecto, marca } = estiloAgente(agente, corbata, i);
+  const { aspecto, marca } = estiloAgente(agente, corbata);
   const tipo = agente.despacho;
   return (
     <Link
@@ -113,20 +189,9 @@ function Puesto({ agente, x, i, seleccionado, enCola, corbata }: { agente: Agent
       <span className="portatil" aria-hidden="true">
         <span className="brillo" />
       </span>
-      {tipo === "direccion" ? (
-        <>
-          <Bandeja papeles={enCola} />
-          <span className="placa-mesa" aria-hidden="true" />
-          <span className="telefono" aria-hidden="true" />
-        </>
-      ) : tipo === "traduccion" ? (
-        <>
-          <span className="papel" aria-hidden="true" />
-          <span className="libreta" aria-hidden="true" />
-        </>
-      ) : (
-        <span className="papel" aria-hidden="true" />
-      )}
+      <span className="objetos-mesa" aria-hidden="true">
+        <ObjetosMesa despacho={tipo} enCola={enCola} />
+      </span>
       <span className="taza" aria-hidden="true" />
     </Link>
   );
@@ -139,17 +204,18 @@ function xPuesto(i: number, total: number, ancho: number): number {
 
 /** Despacho con paredes de cristal, ventana y puerta al pasillo. */
 function DespachoSala({ despacho, agentes, children }: { despacho: Despacho; agentes: number; children: ReactNode }) {
-  const { x, ancho, puerta } = DESPACHOS[despacho];
+  const { x, y, ancho, puerta, abajo } = SALAS[despacho];
   return (
     <div
-      className={`despacho despacho-${despacho}`}
-      style={{ left: x, top: Y_DESPACHOS, width: ancho, height: ALTO_DESPACHO, "--puerta": `${puerta}px` } as CSSProperties}
+      className={`despacho despacho-${despacho}${abajo ? " despacho-abajo" : ""}`}
+      style={{ left: x, top: y, width: ancho, height: ALTO_DESPACHO, "--puerta": `${puerta}px` } as CSSProperties}
       role="group"
-      aria-label={`${NOMBRE[despacho]} · ${plural(agentes, "agente", "agentes")}`}
+      aria-label={`${NOMBRE_DESPACHO[despacho]} · ${plural(agentes, "agente", "agentes")}`}
     >
       <div className="despacho-interior">
         <div className="despacho-pared" aria-hidden="true">
           <span className="zocalo" />
+          {abajo && <span className="puerta-pared" />}
         </div>
         <div className="despacho-suelo" aria-hidden="true" />
         {children}
@@ -159,16 +225,16 @@ function DespachoSala({ despacho, agentes, children }: { despacho: Despacho; age
       <span className="cristal cristal-der" aria-hidden="true" />
       <span className="cristal cristal-frente-a" aria-hidden="true" />
       <span className="cristal cristal-frente-b" aria-hidden="true" />
-      <span className="puerta-cristal" aria-hidden="true" />
+      {!abajo && <span className="puerta-cristal" aria-hidden="true" />}
       <p className="despacho-etiqueta" aria-hidden="true">
-        {NOMBRE[despacho]}
+        {NOMBRE_DESPACHO[despacho]}
       </p>
     </div>
   );
 }
 
-/** Estantería del Director: la carpeta del equipo (perfiles). Los proyectos se gestionan desde la cabecera. */
-function EstanteriaCarpetas({ abierta }: { abierta?: boolean }) {
+/** Estantería del Director: la carpeta "Equipo" abre los perfiles de los agentes. */
+function EstanteriaEquipo({ abierta }: { abierta: boolean }) {
   return (
     <div className="estanteria-carpetas" style={{ left: 22, top: 10 }}>
       <div className="balda balda-carpetas">
@@ -188,6 +254,9 @@ function EstanteriaCarpetas({ abierta }: { abierta?: boolean }) {
             Perfiles del equipo
           </span>
         </Link>
+        {["#8e2f2f", "#2f6db5", "#3c8d5a", "#c9a227", "#34495e"].map((color, i) => (
+          <span key={i} className="libro" aria-hidden="true" style={{ background: color, height: 46 + ((i * 9) % 18), width: 11 }} />
+        ))}
       </div>
       <div className="balda" aria-hidden="true">
         {["#c0392b", "#2f6db5", "#e0b23a", "#3c8d5a", "#8e5aa8", "#e07b39", "#34495e", "#d35d6e"].map((color, i) => (
@@ -207,30 +276,26 @@ function EstanteriaCarpetas({ abierta }: { abierta?: boolean }) {
 
 function decoracion(despacho: Despacho, props: Props): ReactNode {
   switch (despacho) {
-    case "direccion": {
-      const cartel = props.proyectoCartel;
+    case "direccion":
       return (
         <>
-          <EstanteriaCarpetas abierta={props.equipoAbierto} />
-          <Ventana x={190} y={14} ancho={150} alto={96} />
-          {cartel && <CuadroNombre x={356} y={20} {...letreroDe(cartel)} />}
-          <Reloj x={486} y={30} />
-          <LamparaColgante x={250} cable={10} />
-          <AlfombraPlanta x={130} y={222} ancho={340} alto={124} tipo="persa" />
-          <Planta x={476} y={150} tipo="ficus" />
-          <Papelera x={30} y={300} />
+          <EstanteriaEquipo abierta={props.equipoAbierto === true} />
+          <Ventana x={196} y={14} ancho={112} alto={96} />
+          {props.proyectoCartel && <CuadroNombre x={320} y={20} {...letreroDe(props.proyectoCartel)} />}
+          <LamparaColgante x={252} cable={10} />
+          <AlfombraPlanta x={63} y={222} ancho={320} alto={124} tipo="persa" />
+          <Planta x={378} y={150} tipo="ficus" />
+          <Papelera x={30} y={304} />
         </>
       );
-    }
     case "redes":
       return (
         <>
-          <Cuadro x={18} y={30} tipo="abstracto" ancho={46} alto={58} />
-          <Ventana x={78} y={14} ancho={138} alto={96} />
-          <Reloj x={236} y={30} />
-          <Planta x={14} y={170} tipo="frondosa" />
-          <Planta x={240} y={180} tipo="cactus" />
-          <Papelera x={238} y={300} />
+          <Cuadro x={16} y={30} tipo="abstracto" ancho={46} alto={58} />
+          <Ventana x={76} y={14} ancho={132} alto={96} />
+          <Reloj x={228} y={30} />
+          <Planta x={10} y={170} tipo="frondosa" />
+          <Planta x={236} y={180} tipo="cactus" />
         </>
       );
     case "traduccion":
@@ -239,19 +304,71 @@ function decoracion(despacho: Despacho, props: Props): ReactNode {
           <Bandera x={16} y={22} pais="es" />
           <Bandera x={66} y={22} pais="ca" />
           <Bandera x={116} y={22} pais="gb" />
-          <Ventana x={172} y={14} ancho={106} alto={96} />
-          <GloboTerraqueo x={230} y={168} />
-          <Planta x={12} y={176} tipo="sanseviera" />
+          <Ventana x={172} y={14} ancho={104} alto={96} />
+          <GloboTerraqueo x={232} y={168} />
+          <Planta x={8} y={176} tipo="sanseviera" />
+        </>
+      );
+    case "redaccion":
+      return (
+        <>
+          <Ventana x={16} y={14} ancho={112} alto={96} />
+          <Cuadro x={150} y={34} tipo="retrato" ancho={48} alto={60} />
+          <Reloj x={226} y={30} />
+          <MontonPapeles x={8} y={196} montones={3} />
+          <MontonPapeles x={234} y={214} montones={2} />
+        </>
+      );
+    case "programacion":
+      return (
+        <>
+          <Cuadro x={16} y={30} tipo="abstracto" ancho={46} alto={58} />
+          <Ventana x={76} y={14} ancho={90} alto={96} />
+          <Planta x={200} y={196} tipo="cactus" />
+          <Papelera x={14} y={304} />
+        </>
+      );
+    case "ciberseguridad":
+      return (
+        <>
+          <RackServidor x={10} y={44} />
+          <Escudo x={96} y={20} />
+          <Planta x={204} y={200} tipo="sanseviera" />
+        </>
+      );
+    case "secretaria":
+      return (
+        <>
+          <Calendario x={14} y={24} />
+          <Ventana x={108} y={14} ancho={62} alto={96} />
+          <Archivador x={8} y={150} />
+          <Planta x={204} y={196} tipo="frondosa" />
+        </>
+      );
+    case "diseno":
+      return (
+        <>
+          <Carteles x={12} y={18} />
+          <TableroDibujo x={196} y={140} />
+          <Papelera x={14} y={304} />
+        </>
+      );
+    case "informes":
+      return (
+        <>
+          <PizarraGraficos x={12} y={14} />
+          <Archivador x={202} y={150} />
+          <Planta x={8} y={196} tipo="ficus" />
         </>
       );
   }
 }
 
-/** La oficina vista desde arriba: tres despachos, el pasillo y la zona de descanso. */
+/** La oficina vista desde arriba: nueve despachos, el pasillo y un rincón de descanso. */
 export default function Oficina(props: Props) {
   const { datos, enCola, agenteSeleccionado } = props;
   const corbata = props.proyectoCartel ? letreroDe(props.proyectoCartel).colorSecundario : "#F5B841";
-  const despachos: Despacho[] = ["direccion", "redes", "traduccion"];
+  const despachos = Object.keys(SALAS) as Despacho[];
 
   return (
     <Lienzo ancho={ANCHO} alto={ALTO}>
@@ -267,8 +384,7 @@ export default function Oficina(props: Props) {
                 <Puesto
                   key={agente.id}
                   agente={agente}
-                  x={xPuesto(i, suyos.length, DESPACHOS[d].ancho)}
-                  i={i}
+                  x={xPuesto(i, suyos.length, SALAS[d].ancho)}
                   seleccionado={agente.id === agenteSeleccionado}
                   enCola={d === "direccion" ? enCola : 0}
                   corbata={corbata}
@@ -279,32 +395,18 @@ export default function Oficina(props: Props) {
         })}
 
         {/* Pasillo de baldosas con una alfombra larga */}
-        <div className="pasillo" style={{ left: 24, top: 396, width: 1152, height: 110 }} role="group" aria-label="Pasillo">
-          <AlfombraPlanta x={60} y={28} ancho={1032} alto={54} tipo="pasillo" />
-          <Planta x={8} y={4} tipo="sanseviera" />
-          <Planta x={1104} y={4} tipo="frondosa" />
+        <div className="pasillo" style={{ left: 24, top: 396, width: 1042, height: 130 }} role="group" aria-label="Pasillo">
+          <AlfombraPlanta x={70} y={38} ancho={902} alto={54} tipo="pasillo" />
+          <Planta x={8} y={14} tipo="sanseviera" />
           <span className="sala-noche" aria-hidden="true" />
         </div>
 
-        {/* Zona de descanso */}
-        <div className="descanso" style={{ left: 24, top: 518, width: 700, height: 300 }} role="group" aria-label="Zona de descanso">
-          <AlfombraPlanta x={60} y={120} ancho={380} alto={150} tipo="descanso" />
-          <Sofa x={86} y={110} color="#4f6db8" />
-          <Sofa x={262} y={110} color="#c47b57" />
-          <Mesita x={180} y={200} />
-          <Lampara x={470} y={70} />
-          <Cafetera x={560} y={60} />
-          <Planta x={16} y={30} tipo="ficus" />
-          <Planta x={620} y={190} tipo="frondosa" />
-          <Planta x={470} y={200} tipo="cactus" />
-          <p className="despacho-etiqueta descanso-etiqueta" aria-hidden="true">
-            Zona de descanso
-          </p>
+        {/* Rincón de descanso */}
+        <div className="descanso" style={{ left: 1078, top: 396, width: 298, height: 130 }} role="group" aria-label="Rincón de descanso">
+          <Sofa x={14} y={40} color="#4f6db8" />
+          <Cafetera x={178} y={22} />
+          <Planta x={232} y={44} tipo="frondosa" />
           <span className="sala-noche" aria-hidden="true" />
-        </div>
-
-        <div className="hueco-despachos" style={{ left: 736, top: 518, width: 440, height: 300 }}>
-          + Espacio para próximos despachos
         </div>
       </Ambiente>
     </Lienzo>

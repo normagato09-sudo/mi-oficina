@@ -353,3 +353,76 @@ export function Mesita({ x, y }: Pos) {
     </Pieza>
   );
 }
+
+/** Montones de papeles en el suelo (Redacción). */
+export function MontonPapeles({ x, y, montones = 2 }: Pos & { montones?: number }) {
+  return (
+    <Pieza x={x} y={y} className="monton-papeles">
+      {Array.from({ length: montones }, (_, i) => (
+        <span key={i} className="monton" style={{ height: [46, 30, 38][i % 3], left: i * 16, zIndex: montones - i }} />
+      ))}
+    </Pieza>
+  );
+}
+
+/** Armario de servidores con luces que parpadean (Ciberseguridad). */
+export function RackServidor({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="rack-servidor">
+      {Array.from({ length: 6 }, (_, i) => (
+        <span key={i} className="bandeja-rack">
+          <span className="led" style={{ animationDelay: `${-i * 0.37}s` }} />
+          <span className="led l2" style={{ animationDelay: `${-i * 0.61}s` }} />
+        </span>
+      ))}
+    </Pieza>
+  );
+}
+
+/** Escudo con candado colgado en la pared (Ciberseguridad). */
+export function Escudo({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="escudo-pared">
+      <span className="candado" />
+    </Pieza>
+  );
+}
+
+/** Carteles colgados en la pared (Diseño). */
+export function Carteles({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="carteles-pared">
+      <span className="cartel c1" />
+      <span className="cartel c2" />
+      <span className="cartel c3" />
+    </Pieza>
+  );
+}
+
+/** Tablero de dibujo inclinado sobre su caballete (Diseño). */
+export function TableroDibujo({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="tablero-dibujo">
+      <span className="tablero" />
+      <span className="patas" />
+    </Pieza>
+  );
+}
+
+/** Pizarra blanca con gráficos de barras y una línea (Informes). */
+export function PizarraGraficos({ x, y }: Pos) {
+  return (
+    <Pieza x={x} y={y} className="pizarra-graficos">
+      <svg viewBox="0 0 160 90" preserveAspectRatio="none">
+        <path d="M10 80 H150 M10 80 V10" stroke="#5b6378" strokeWidth="2" fill="none" />
+        <rect x="20" y="52" width="14" height="28" fill="#4c9aff" />
+        <rect x="42" y="38" width="14" height="42" fill="#f5b841" />
+        <rect x="64" y="46" width="14" height="34" fill="#4c9aff" />
+        <rect x="86" y="26" width="14" height="54" fill="#5fd08a" />
+        <path d="M108 64 L122 50 L134 56 L148 22" stroke="#e5484d" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="148" cy="22" r="3.5" fill="#e5484d" />
+      </svg>
+      <span className="repisa" />
+    </Pieza>
+  );
+}

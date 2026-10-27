@@ -24,7 +24,16 @@ export type Edificio = {
 };
 
 /** Despachos de la oficina (migración 0007). */
-export type Despacho = "direccion" | "redes" | "traduccion";
+export type Despacho =
+  | "direccion"
+  | "redes"
+  | "traduccion"
+  | "redaccion"
+  | "programacion"
+  | "ciberseguridad"
+  | "secretaria"
+  | "diseno"
+  | "informes";
 
 export type Departamento = {
   id: string;
@@ -40,7 +49,7 @@ export type Agente = {
   /** Despacho de la oficina donde trabaja (migración 0007). */
   despacho?: Despacho | null;
   nombre: string;
-  tipo: "redes" | "direccion" | "comunicacion" | "administracion" | "rrhh" | "traduccion";
+  tipo: "redes" | "direccion" | "comunicacion" | "administracion" | "rrhh" | Despacho;
   instrucciones: string;
   creado_en: string;
   /** Última vez que se abrió su ficha (migración 0003; puede faltar si aún no se ha ejecutado). */

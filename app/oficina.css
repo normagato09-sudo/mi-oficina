@@ -2217,3 +2217,446 @@
   .puesto.trabajando .portatil .brillo { opacity: 0.8; }
   .pose-trabajando .luz-pantalla { opacity: 0.6; }
 }
+
+/* ═════════════ Los seis despachos nuevos ═════════════ */
+
+.despacho-redaccion {
+  --pared: repeating-linear-gradient(90deg, #f5ead2 0 18px, #efe1c4 18px 36px);
+  --zocalo: #8a6a3a;
+  --suelo: repeating-linear-gradient(90deg, #7a4b2a 0 30px, #6a3f22 30px 60px);
+}
+.despacho-programacion {
+  --pared: linear-gradient(180deg, #2b3245, #232a3b);
+  --zocalo: #151a26;
+  --suelo:
+    radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1.5px) 0 0 / 10px 10px,
+    #4a5068;
+}
+.despacho-ciberseguridad {
+  --pared:
+    linear-gradient(rgba(95, 208, 138, 0.08) 1px, transparent 1px) 0 0 / 20px 20px,
+    linear-gradient(90deg, rgba(95, 208, 138, 0.08) 1px, transparent 1px) 0 0 / 20px 20px,
+    #1d2430;
+  --zocalo: #0f141c;
+  --suelo: repeating-conic-gradient(#3a4252 0 25%, #333a49 0 50%) 0 0 / 40px 40px;
+}
+.despacho-secretaria {
+  --pared: linear-gradient(180deg, #e3efe0, #d6e6d2);
+  --zocalo: #8fae8a;
+  --suelo: repeating-linear-gradient(90deg, #d6b88c 0 36px, #caa97b 36px 72px);
+}
+.despacho-diseno {
+  --pared:
+    radial-gradient(circle at 12% 30%, rgba(229, 72, 77, 0.35) 0 6px, transparent 7px),
+    radial-gradient(circle at 78% 70%, rgba(76, 154, 255, 0.35) 0 8px, transparent 9px),
+    radial-gradient(circle at 60% 20%, rgba(245, 184, 65, 0.4) 0 5px, transparent 6px),
+    #fbf8f2;
+  --zocalo: #c9b99f;
+  --suelo: repeating-linear-gradient(90deg, #e2d2b4 0 36px, #d8c6a5 36px 72px);
+}
+.despacho-informes {
+  --pared: linear-gradient(180deg, #e4eaf2, #d6dee9);
+  --zocalo: #8a97ab;
+  --suelo: repeating-linear-gradient(90deg, #c9a97e 0 40px, #bf9f74 40px 80px);
+}
+
+/* Fila de abajo: la puerta da al pasillo por la pared del fondo; el frente es todo cristal */
+.despacho-abajo .cristal-frente-a {
+  width: calc(100% + 8px);
+}
+.despacho-abajo .cristal-frente-b {
+  display: none;
+}
+.puerta-pared {
+  position: absolute;
+  left: var(--puerta);
+  bottom: 0;
+  width: 64px;
+  height: 112px;
+  border: 5px solid #8fa3b8;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.18), transparent 40%),
+    repeating-conic-gradient(#ece6da 0 25%, #d5cdbd 0 50%) 0 0 / 22px 22px;
+}
+
+/* Los objetos de mesa se colocan respecto al puesto, por encima del escritorio */
+.objetos-mesa {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Redacción: máquina de escribir antigua y papeles */
+.marca-redaccion .portatil,
+.marca-programacion .portatil {
+  display: none;
+}
+.maquina-escribir {
+  position: absolute;
+  left: 62px;
+  top: 92px;
+  width: 96px;
+  height: 40px;
+  border-radius: 14px 14px 6px 6px;
+  background: linear-gradient(180deg, #2f3a2f, #1d241d);
+  box-shadow: 0 4px 0 #111511, inset 0 3px 0 rgba(255, 255, 255, 0.12);
+}
+.maquina-escribir::before {
+  /* rodillo */
+  content: "";
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  top: -4px;
+  height: 9px;
+  border-radius: 5px;
+  background: linear-gradient(#3b3b3b, #151515);
+}
+.hoja-maquina {
+  position: absolute;
+  left: 22px;
+  top: -30px;
+  width: 52px;
+  height: 30px;
+  background: repeating-linear-gradient(180deg, #fbfaf6 0 5px, #c5ccd9 5px 6px);
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.15);
+}
+.teclas {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 7px;
+  height: 16px;
+  background: radial-gradient(circle, #e9e2d0 0 3px, transparent 3.5px) 0 0 / 9px 8px;
+}
+.puesto.trabajando .hoja-maquina {
+  animation: escribir-hoja 1.4s steps(4) infinite;
+}
+@keyframes escribir-hoja {
+  from { transform: translateY(0); }
+  to { transform: translateY(-4px); }
+}
+.pila-mesa {
+  position: absolute;
+  left: 14px;
+  top: 104px;
+  width: 38px;
+  height: 26px;
+  background: repeating-linear-gradient(180deg, #fbfaf6 0 3px, #d9d4c6 3px 4px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
+  transform: rotate(-4deg);
+}
+.monton-papeles {
+  position: absolute;
+  width: 70px;
+  height: 50px;
+}
+.monton {
+  position: absolute;
+  bottom: 0;
+  width: 36px;
+  background: repeating-linear-gradient(180deg, #fbfaf6 0 3px, #d6cfbd 3px 4px);
+  box-shadow: 2px 3px 4px rgba(0, 0, 0, 0.25);
+}
+
+/* Programación: tres monitores con código de colores */
+.monitores {
+  position: absolute;
+  left: 18px;
+  top: 64px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.monitor {
+  position: relative;
+  width: 58px;
+  height: 40px;
+  border: 3px solid #1b1f2b;
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg, #c678dd 0 30%, transparent 30%) 4px 4px / 100% 3px no-repeat,
+    linear-gradient(90deg, #98c379 0 55%, transparent 55%) 10px 10px / 100% 3px no-repeat,
+    linear-gradient(90deg, #61afef 0 40%, transparent 40%) 10px 16px / 100% 3px no-repeat,
+    linear-gradient(90deg, #e5c07b 0 60%, transparent 60%) 16px 22px / 100% 3px no-repeat,
+    linear-gradient(90deg, #e06c75 0 25%, transparent 25%) 4px 28px / 100% 3px no-repeat,
+    #1e2230;
+  box-shadow: 0 0 10px rgba(97, 175, 239, 0.25);
+}
+.monitor::after {
+  /* pie */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 16px;
+  height: 8px;
+  margin-left: -8px;
+  background: linear-gradient(90deg, transparent 5px, #1b1f2b 5px 11px, transparent 11px);
+}
+.monitor.m2 {
+  width: 66px;
+  height: 46px;
+}
+.monitor.m1 { transform: perspective(200px) rotateY(18deg); }
+.monitor.m3 { transform: perspective(200px) rotateY(-18deg); }
+.puesto.trabajando .monitor {
+  animation: pantalla 2.6s ease-in-out infinite;
+}
+
+/* Ciberseguridad: pantalla con candado, servidores y escudo */
+.marca-ciberseguridad .portatil {
+  --brillo: rgba(95, 208, 138, 0.8);
+  background: #0d1f14;
+  box-shadow: 0 3px 0 #05110a, inset 0 0 0 2px #1d3a27;
+}
+.marca-ciberseguridad .portatil::before {
+  width: 16px;
+  height: 12px;
+  margin-top: 8px;
+  border-radius: 2px;
+  background: #5fd08a;
+}
+.marca-ciberseguridad .portatil::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  width: 8px;
+  height: 9px;
+  margin-left: -7px;
+  border: 3px solid #5fd08a;
+  border-bottom: none;
+  border-radius: 7px 7px 0 0;
+}
+.rack-servidor {
+  position: absolute;
+  width: 70px;
+  height: 186px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 7px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #2a2f3c, #1b1f29);
+  box-shadow: inset 0 0 0 3px #3a4050, 0 6px 8px rgba(0, 0, 0, 0.4);
+}
+.bandeja-rack {
+  position: relative;
+  height: 22px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(90deg, #11141b 0 3px, #262b37 3px 6px);
+}
+.bandeja-rack .led {
+  position: absolute;
+  right: 6px;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #5fd08a;
+  box-shadow: 0 0 6px #5fd08a;
+  animation: led-servidor 1.3s steps(2) infinite;
+}
+.bandeja-rack .led.l2 {
+  right: 16px;
+  background: #4c9aff;
+  box-shadow: 0 0 6px #4c9aff;
+  animation-duration: 0.9s;
+}
+@keyframes led-servidor {
+  50% { opacity: 0.25; }
+}
+.escudo-pared {
+  position: absolute;
+  width: 64px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3f60de, #22357f);
+  clip-path: polygon(50% 0, 100% 14%, 96% 58%, 50% 100%, 4% 58%, 0 14%);
+}
+.escudo-pared .candado {
+  position: relative;
+  width: 24px;
+  height: 18px;
+  margin-top: 12px;
+  border-radius: 3px;
+  background: #f5b841;
+}
+.escudo-pared .candado::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: -12px;
+  width: 10px;
+  height: 12px;
+  border: 3px solid #f5b841;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Secretaría: fichero de tarjetas */
+.fichero {
+  position: absolute;
+  left: 16px;
+  top: 108px;
+  width: 42px;
+  height: 26px;
+  border-radius: 3px;
+  background: linear-gradient(#b5651d, #8a4a12);
+  box-shadow: 0 3px 0 #5e320c;
+}
+.fichero::before {
+  /* fichas asomando */
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -10px;
+  height: 12px;
+  background: linear-gradient(90deg, #fbfaf6 0 22%, transparent 22% 26%, #f5e7a8 26% 48%, transparent 48% 52%, #fbfaf6 52% 74%, transparent 74% 78%, #cfe3f5 78%);
+}
+
+/* Diseño: paleta, lápices, carteles y tablero de dibujo */
+.paleta {
+  position: absolute;
+  left: 16px;
+  top: 114px;
+  width: 46px;
+  height: 30px;
+  border-radius: 50% 50% 46% 54%;
+  background:
+    radial-gradient(circle at 26% 40%, #e5484d 0 4px, transparent 4.5px),
+    radial-gradient(circle at 46% 28%, #f5b841 0 4px, transparent 4.5px),
+    radial-gradient(circle at 66% 36%, #4c9aff 0 4px, transparent 4.5px),
+    radial-gradient(circle at 74% 62%, #5fd08a 0 4px, transparent 4.5px),
+    radial-gradient(circle at 40% 70%, #fbfaf6 0 5px, transparent 5.5px),
+    #d9b98a;
+  box-shadow: 0 2px 0 #a8875a;
+  transform: rotate(-10deg);
+}
+.lapices {
+  position: absolute;
+  left: 148px;
+  top: 108px;
+  width: 16px;
+  height: 20px;
+  border-radius: 0 0 3px 3px;
+  background: #3a4050;
+}
+.lapices::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 100%;
+  height: 14px;
+  background: linear-gradient(90deg, #e5484d 0 3px, transparent 3px 4px, #4c9aff 4px 7px, transparent 7px 8px, #f5b841 8px 11px, transparent 11px);
+}
+.carteles-pared {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.cartel {
+  border: 3px solid #fbfaf6;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25);
+}
+.cartel.c1 {
+  width: 46px;
+  height: 64px;
+  background: linear-gradient(#e5484d 0 60%, #fbfaf6 60% 64%, #1b2136 64%);
+  transform: rotate(-3deg);
+}
+.cartel.c2 {
+  width: 56px;
+  height: 74px;
+  background:
+    radial-gradient(circle at 50% 36%, #f5b841 0 14px, transparent 15px),
+    linear-gradient(#3f60de 0 70%, #fbfaf6 70%);
+}
+.cartel.c3 {
+  width: 44px;
+  height: 58px;
+  background: repeating-linear-gradient(135deg, #5fd08a 0 8px, #1f8a8a 8px 16px);
+  transform: rotate(4deg);
+}
+.tablero-dibujo {
+  position: absolute;
+  width: 60px;
+  height: 130px;
+}
+.tablero-dibujo .tablero {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 60px;
+  height: 76px;
+  border: 3px solid #8a5a35;
+  border-radius: 3px;
+  background:
+    linear-gradient(135deg, transparent 46%, #4c9aff 46% 48%, transparent 48%),
+    radial-gradient(circle at 30% 30%, transparent 10px, #e5484d 10px 12px, transparent 12px),
+    #fbfaf6;
+  box-shadow: 0 5px 6px rgba(0, 0, 0, 0.3);
+  transform: perspective(160px) rotateX(18deg);
+}
+.tablero-dibujo .patas {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 70px;
+  bottom: 0;
+  background:
+    linear-gradient(70deg, transparent 44%, #6b4427 44% 52%, transparent 52%),
+    linear-gradient(-70deg, transparent 44%, #6b4427 44% 52%, transparent 52%);
+}
+
+/* Informes: pizarra con gráficos y carpetas */
+.pizarra-graficos {
+  position: absolute;
+  width: 160px;
+  height: 96px;
+  padding: 3px;
+  border: 5px solid #b4bcd3;
+  border-radius: 4px;
+  background: #fdfdfb;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25);
+}
+.pizarra-graficos svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pizarra-graficos .repisa {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: -11px;
+  height: 6px;
+  border-radius: 2px;
+  background: #8a93ad;
+}
+.carpetas-mesa {
+  position: absolute;
+  left: 14px;
+  top: 110px;
+  width: 46px;
+  height: 26px;
+  background: linear-gradient(#3f60de 0 7px, #fbfaf6 7px 8px, #f5b841 8px 15px, #fbfaf6 15px 16px, #5fd08a 16px 23px, #fbfaf6 23px 24px, #e5484d 24px);
+  border-radius: 2px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+  transform: rotate(3deg);
+}
+
+/* Rincón de descanso: el sofá un poco más pequeño */
+.descanso .sofa {
+  transform: scale(0.9);
+  transform-origin: 0 0;
+}

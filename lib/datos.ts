@@ -22,7 +22,16 @@ export const NOMBRE_DESPACHO: Record<Despacho, string> = {
   direccion: "Dirección",
   redes: "Redes sociales",
   traduccion: "Traducción",
+  redaccion: "Redacción",
+  programacion: "Programación",
+  ciberseguridad: "Ciberseguridad",
+  secretaria: "Secretaría",
+  diseno: "Diseño",
+  informes: "Informes",
 };
+
+/** Orden de los despachos (fila de arriba y fila de abajo): también el de la carpeta "Equipo". */
+export const ORDEN_DESPACHOS = Object.keys(NOMBRE_DESPACHO) as Despacho[];
 
 function contarEstados(filas: { estado: EstadoPublicacion }[]): Record<EstadoPublicacion, number> {
   const estados: Record<EstadoPublicacion, number> = {
@@ -99,7 +108,9 @@ export async function cargarOficina(): Promise<DatosOficina> {
     .order("creado_en")
     .returns<(Agente & { despacho: Despacho })[]>();
   if (e1) throw new Error(`No se pudieron leer los agentes: ${e1.message}. ¿Has ejecutado la migración 0007?`);
-  const equipo = (agentes ?? []).filter((a) => a.activo !== false);
+  const equipo = (agentes ?? [])
+    .filter((a) => a.activo !== false && ORDEN_DESPACHOS.includes(a.despacho))
+    .sort((a, b) => ORDEN_DESPACHOS.indexOf(a.despacho) - ORDEN_DESPACHOS.indexOf(b.despacho));
 
   const ids = equipo.map((a) => a.id);
   const { data: estados, error: e2 } = ids.length
