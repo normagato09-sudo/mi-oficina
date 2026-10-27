@@ -5,6 +5,15 @@ export type Tono = "verde" | "amarillo" | "rojo" | "azul" | "gris";
 /** Luz de un agente: en su ventana de la fachada, en su puesto y en el punto de su burbuja. */
 export type Luz = "apagada" | "amarillo" | "rojo" | "verde";
 
+/** Cómo va el reparto del Director (encargos en curso, en error o esperando mi respuesta). */
+export type ResumenReparto = {
+  enCurso: boolean;
+  /** Encargos en los que el Director me ha hecho una pregunta. */
+  esperando: number;
+  /** Texto corto si el encargo en curso ha fallado (se ve en rojo), o null. */
+  error: string | null;
+};
+
 export type EstadoAgente = {
   luz: Luz;
   texto: string;
@@ -18,19 +27,32 @@ export type EstadoAgente = {
  * Prioridad: rojo (te necesita) > amarillo (trabajando) > verde (terminado sin ver) > apagada.
  */
 export function estadoAgente(
-  agente: { estados: Record<EstadoPublicacion, number>; sinVer: number; activo?: boolean; aviso_ia?: string | null },
+  agente: {
+    estados: Record<EstadoPublicacion, number>;
+    sinVer: number;
+    activo?: boolean;
+    aviso_ia?: string | null;
+    /** Tareas que le ha repartido el Director y aún no ha hecho. */
+    tareasPendientes?: number;
+    /** Solo el Director: cómo va el reparto de los encargos. */
+    reparto?: ResumenReparto;
+  },
   /** Encargos esperando en su cola (Director): si no hay nada más urgente, dice "X en cola". */
   enCola = 0,
 ): EstadoAgente {
-  const { estados, sinVer } = agente;
+  const { estados, sinVer, reparto } = agente;
   if (agente.activo === false) return { luz: "apagada", texto: "Próximamente", trabajando: false, inactivo: true };
   const base = { trabajando: estados.preparando + estados.publicando > 0, inactivo: false };
   // La IA no ha podido trabajar (p. ej. límite gratuito alcanzado): también te necesita.
   if (agente.aviso_ia) return { ...base, luz: "rojo", texto: agente.aviso_ia };
+  if (reparto?.error) return { ...base, luz: "rojo", texto: reparto.error };
+  if (reparto?.esperando) return { ...base, luz: "rojo", texto: reparto.esperando === 1 ? "Te ha hecho una pregunta" : `${reparto.esperando} preguntas para ti` };
+  if (reparto?.enCurso) return { ...base, trabajando: true, luz: "amarillo", texto: "Repartiendo…" };
   if (estados.lista > 0) return { ...base, luz: "rojo", texto: "Te necesita" };
   if (estados.error > 0) return { ...base, luz: "rojo", texto: "Error" };
   if (estados.preparando > 0) return { ...base, luz: "amarillo", texto: "Preparando…" };
   if (estados.publicando > 0) return { ...base, luz: "amarillo", texto: "Publicando…" };
+  if (agente.tareasPendientes) return { ...base, luz: "amarillo", texto: "Tarea pendiente" };
   if (sinVer > 0) return { ...base, luz: "verde", texto: "¡Terminado!" };
   if (enCola > 0) return { ...base, luz: "apagada", texto: `${enCola} en cola` };
   return { ...base, luz: "apagada", texto: "Libre" };

@@ -1,5 +1,6 @@
 import "server-only";
-import { LimiteIAError } from "./ia";
+import type { ResumenReparto } from "./estado";
+import { LimiteIAError, MENSAJE_LIMITE } from "./ia";
 import { supabase } from "./supabase";
 import type { Agente, Aviso, Despacho, Edificio, EstadoPublicacion, Publicacion } from "./tipos";
 import type { IdiomaProyecto } from "./idiomas";
@@ -9,6 +10,10 @@ export type AgenteConEstado = Agente & {
   estados: Record<EstadoPublicacion, number>;
   /** Publicaciones publicadas después de la última vez que se abrió su ficha. */
   sinVer: number;
+  /** Tareas que le ha repartido el Director y aún no ha hecho. */
+  tareasPendientes: number;
+  /** Solo el Director: cómo va el reparto de los encargos. */
+  reparto?: ResumenReparto;
 };
 
 export type DatosOficina = {
@@ -16,6 +21,8 @@ export type DatosOficina = {
   proyectos: Edificio[];
   /** El equipo: agentes activos con despacho. */
   agentes: AgenteConEstado[];
+  /** Hay un encargo en curso: la página se refresca sola hasta que termine. */
+  hayEnCurso: boolean;
 };
 
 export const NOMBRE_DESPACHO: Record<Despacho, string> = {
@@ -122,8 +129,25 @@ export async function cargarOficina(): Promise<DatosOficina> {
     : { data: [], error: null };
   if (e2) throw new Error(`No se pudieron leer las publicaciones: ${e2.message}`);
 
+  // Reparto del Director (sin la migración 0010 no hay tareas ni estos estados: todo a cero).
+  const [{ data: tareas }, { data: activos }] = await Promise.all([
+    db.from("tareas").select("agente_id").eq("estado", "pendiente").returns<{ agente_id: string }[]>(),
+    db
+      .from("encargos")
+      .select("estado, aviso")
+      .in("estado", ["en_curso", "error", "esperando_respuesta"])
+      .returns<{ estado: "en_curso" | "error" | "esperando_respuesta"; aviso: string | null }[]>(),
+  ]);
+  const enError = (activos ?? []).find((e) => e.estado === "error");
+  const reparto: ResumenReparto = {
+    enCurso: (activos ?? []).some((e) => e.estado === "en_curso"),
+    esperando: (activos ?? []).filter((e) => e.estado === "esperando_respuesta").length,
+    error: enError ? (enError.aviso?.startsWith(MENSAJE_LIMITE) ? "Límite de la IA: reintenta" : "Error al repartir") : null,
+  };
+
   return {
     proyectos,
+    hayEnCurso: reparto.enCurso,
     agentes: equipo.map((a) => {
       const suyas = (estados ?? []).filter((p) => p.agente_id === a.id);
       return {
@@ -132,6 +156,8 @@ export async function cargarOficina(): Promise<DatosOficina> {
         sinVer: a.visto_en
           ? suyas.filter((p) => p.estado === "publicada" && Date.parse(p.actualizado_en) > Date.parse(a.visto_en!)).length
           : 0,
+        tareasPendientes: (tareas ?? []).filter((t) => t.agente_id === a.id).length,
+        ...(a.despacho === "direccion" && a.tipo === "direccion" ? { reparto } : {}),
       };
     }),
   };

@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { refresh } from "next/cache";
+import { after } from "next/server";
 import { cargarProyectos, marcarAvisosLeidos } from "@/lib/datos";
 import {
   cancelarEncargo,
@@ -10,9 +11,12 @@ import {
   marcarUrgente,
   moverEncargo,
   prepararSubidas,
+  reanudarEncargo,
+  responderPregunta,
   type ArchivoPedido,
   type SubidaPreparada,
 } from "@/lib/encargos";
+import { avanzarCola } from "@/lib/reparto";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
 type Resultado = { ok?: true; error?: string };
@@ -66,6 +70,34 @@ export async function enviarEncargo(datos: {
   } catch (e) {
     return { error: mensaje(e) };
   }
+  // Si el Director está libre, empieza con la cola en segundo plano.
+  after(avanzarCola);
+  refresh();
+  return { ok: true };
+}
+
+/** Mi respuesta a la pregunta del Director: vuelve a decidir con ella. */
+export async function responderEncargo(id: string, respuesta: string): Promise<Resultado> {
+  if (!(await comprobarSesion())) return { error: SESION_CADUCADA };
+  try {
+    await responderPregunta(id, String(respuesta ?? ""));
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  after(avanzarCola);
+  refresh();
+  return { ok: true };
+}
+
+/** "Reintentar" (encargo en error) o "Reanudar" (atascado): el Director vuelve a ponerse con él. */
+export async function reanudarEncargoAccion(id: string): Promise<Resultado> {
+  if (!(await comprobarSesion())) return { error: SESION_CADUCADA };
+  try {
+    await reanudarEncargo(id);
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  after(avanzarCola);
   refresh();
   return { ok: true };
 }

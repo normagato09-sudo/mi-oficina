@@ -1,4 +1,5 @@
-import { connection } from "next/server";
+import { after, connection } from "next/server";
+import AutoRefresco from "@/components/AutoRefresco";
 import Header from "@/components/Header";
 import Oficina, { estiloAgente, letreroDe } from "@/components/oficina/Oficina";
 import FichaAgente from "@/components/ficha/FichaAgente";
@@ -7,11 +8,27 @@ import PanelProyectos from "@/components/panel/PanelProyectos";
 import NuevoEncargo from "@/components/encargos/NuevoEncargo";
 import ColaDirector from "@/components/encargos/ColaDirector";
 import HistorialEncargos from "@/components/encargos/HistorialEncargos";
+import RepartoDirector from "@/components/encargos/RepartoDirector";
+import TareasAgente from "@/components/encargos/TareasAgente";
 import PlantillasCartel, { type FotoEncargo } from "@/components/carteles/PlantillasCartel";
-import { cargarCola, cargarHistorial, proyectoEnCurso, resumenCola, type EncargoVista } from "@/lib/encargos";
+import {
+  cargarActivos,
+  cargarCola,
+  cargarHistorial,
+  cargarTareasPendientes,
+  estaAtascado,
+  proyectoEnCurso,
+  resumenCola,
+  type EncargoVista,
+  type TareaVista,
+} from "@/lib/encargos";
+import { avanzarCola } from "@/lib/reparto";
 import { cargarAvisos, cargarOficina, cargarTodosLosProyectos, marcarVisto, type DatosOficina } from "@/lib/datos";
 import { plural } from "@/lib/estado";
 import type { Aviso, Edificio } from "@/lib/tipos";
+
+/** La cola del Director corre en segundo plano (after) en la página y en sus acciones: hasta 60 s. */
+export const maxDuration = 60;
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   await connection();
@@ -34,6 +51,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       </>
     );
   }
+
+  // Al abrir (y en cada refresco) la cola sigue avanzando: empieza el siguiente o continúa el que espera.
+  after(avanzarCola);
 
   const director = datos.agentes.find((a) => a.despacho === "direccion" && a.tipo === "direccion");
   const [cola, enCurso, avisos] = await Promise.all([
@@ -67,12 +87,23 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const esDirector = agente !== undefined && agente.id === director?.id;
   let colaDirector: EncargoVista[] = [];
   let historial: EncargoVista[] = [];
+  let activos: EncargoVista[] = [];
   let errorCola: string | null = null;
   if (esDirector) {
     try {
-      [colaDirector, historial] = await Promise.all([cargarCola(), cargarHistorial()]);
+      [colaDirector, historial, activos] = await Promise.all([cargarCola(), cargarHistorial(), cargarActivos()]);
     } catch (e) {
       errorCola = e instanceof Error ? e.message : String(e);
+    }
+  }
+  // Los demás agentes: sus tareas pendientes.
+  let tareas: TareaVista[] = [];
+  let errorTareas: string | null = null;
+  if (agente && !esDirector) {
+    try {
+      tareas = await cargarTareasPendientes(agente.id);
+    } catch (e) {
+      errorTareas = e instanceof Error ? e.message : String(e);
     }
   }
   // El Diseñador puede usar en sus plantillas las fotos adjuntas a los encargos.
@@ -87,6 +118,8 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
   return (
     <>
+      {/* Mientras el Director trabaja (o hay cola que puede empezar), la página se refresca sola. */}
+      <AutoRefresco activo={datos.hayEnCurso || (cola.total > 0 && !director?.reparto?.error)} />
       <Header directorId={director?.id} avisos={avisos} proyectosAbierto={panel === "proyectos"} />
       <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-6 py-6">
         <main className="min-w-0 flex-1">
@@ -139,6 +172,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
                   </p>
                 ) : (
                   <>
+                    <RepartoDirector activos={activos.map((e) => ({ ...e, atascado: estaAtascado(e) }))} />
                     <ColaDirector cola={colaDirector} />
                     <HistorialEncargos encargos={historial} />
                   </>
@@ -146,6 +180,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               </>
             ) : (
               <>
+                <TareasAgente tareas={tareas} error={errorTareas} />
                 {agente.despacho === "diseno" && (
                   <PlantillasCartel
                     proyectos={datos.proyectos.map((p) => {
@@ -155,14 +190,6 @@ export default async function Home({ searchParams }: PageProps<"/">) {
                     fotos={fotosEncargos}
                   />
                 )}
-                <section aria-labelledby="trabajos-titulo" className="mt-8">
-                  <h3 id="trabajos-titulo" className="font-display text-lg font-extrabold">
-                    {agente.despacho === "traduccion" ? "Traducciones" : "Publicaciones"}
-                  </h3>
-                  <p className="mt-3 rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
-                    Todavía no tiene trabajos. Le llegarán del Director cuando reparta los encargos.
-                  </p>
-                </section>
               </>
             )}
           </FichaAgente>

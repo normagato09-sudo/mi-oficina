@@ -27,12 +27,41 @@ export type Encargo = {
   orden: number;
   creado_en: string;
   actualizado_en: string;
+  // Reparto con la IA (migración 0010; pueden faltar si aún no se ha ejecutado):
+  /** Preguntas del Director y mis respuestas. */
+  preguntas?: Pregunta[];
+  /** Resumen del Director al repartir (o al preguntar). */
+  nota_director?: string | null;
+  /** Qué ha fallado (p. ej. límite de la IA): el encargo se ve en rojo con "Reintentar". */
+  aviso?: string | null;
+  /** Cuándo puede continuar la cola con este encargo (null = nadie debe tocarlo). */
+  reintentar_en?: string | null;
+  /** Hasta cuándo lo está procesando una ejecución. */
+  paso_hasta?: string | null;
+  reintentos?: number;
 };
 
-/** Encargo listo para mostrar: imágenes con URL firmada y el proyecto con nombre y color. */
+export type Pregunta = { pregunta: string; respuesta: string | null };
+
+export type EstadoTarea = "pendiente" | "en_curso" | "terminada" | "error";
+
+/** Lo que el Director ha encargado a un agente (migración 0010). */
+export type Tarea = {
+  id: string;
+  encargo_id: string;
+  agente_id: string;
+  instrucciones: string;
+  estado: EstadoTarea;
+  resultado: string;
+  creado_en: string;
+  actualizado_en: string;
+};
+
+/** Encargo listo para mostrar: imágenes con URL firmada, el proyecto con nombre y color y a quién se ha repartido. */
 export type EncargoVista = Omit<Encargo, "adjuntos"> & {
   adjuntos: ((AdjuntoImagen & { url: string | null }) | (Omit<AdjuntoPdf, "texto"> & { caracteres: number }))[];
   proyecto: { nombre: string; color: string };
+  tareas: (Pick<Tarea, "id" | "agente_id" | "instrucciones" | "estado"> & { agente: string })[];
 };
 
 /* ───────────── Imágenes y PDF ───────────── */
@@ -205,6 +234,16 @@ async function paraMostrar(encargos: Encargo[]): Promise<EncargoVista[]> {
     : { data: [] };
   const porId = new Map((proyectos ?? []).map((p) => [p.id, p]));
 
+  // A quién se ha repartido cada encargo (sin la migración 0010 la tabla no existe: sin tareas).
+  const { data: tareas } = encargos.length
+    ? await db
+        .from("tareas")
+        .select("id, encargo_id, agente_id, instrucciones, estado, agentes(nombre)")
+        .in("encargo_id", encargos.map((e) => e.id))
+        .order("creado_en")
+        .returns<(Pick<Tarea, "id" | "encargo_id" | "agente_id" | "instrucciones" | "estado"> & { agentes: { nombre: string } | null })[]>()
+    : { data: [] };
+
   return encargos.map((e) => ({
     ...e,
     adjuntos: e.adjuntos.map((a) =>
@@ -213,6 +252,9 @@ async function paraMostrar(encargos: Encargo[]): Promise<EncargoVista[]> {
         : { tipo: "pdf" as const, nombre: a.nombre, paginas: a.paginas, caracteres: a.texto.length },
     ),
     proyecto: { nombre: porId.get(e.edificio_id)?.nombre ?? "Proyecto", color: porId.get(e.edificio_id)?.color ?? "#8a93ad" },
+    tareas: (tareas ?? [])
+      .filter((t) => t.encargo_id === e.id)
+      .map((t) => ({ id: t.id, agente_id: t.agente_id, instrucciones: t.instrucciones, estado: t.estado, agente: t.agentes?.nombre ?? "Agente" })),
   }));
 }
 
@@ -230,12 +272,25 @@ export async function cargarCola(): Promise<EncargoVista[]> {
   return paraMostrar(data ?? []);
 }
 
-/** Encargos que ya han salido de la cola (en curso, terminados o cancelados), del más reciente al más antiguo. */
+/** Encargos que el Director tiene entre manos: el que está en curso (o en error) y los que esperan mi respuesta. */
+export async function cargarActivos(): Promise<EncargoVista[]> {
+  const { data, error } = await supabase()
+    .from("encargos")
+    .select("*")
+    .in("estado", ["en_curso", "error", "esperando_respuesta"] satisfies EstadoEncargo[])
+    .order("actualizado_en")
+    .returns<Encargo[]>();
+  // Sin la migración 0010 estos estados no existen: no hay nada activo.
+  if (error) return [];
+  return paraMostrar(data ?? []);
+}
+
+/** Encargos ya repartidos, terminados o cancelados, del más reciente al más antiguo. */
 export async function cargarHistorial(limite = 20): Promise<EncargoVista[]> {
   const { data, error } = await supabase()
     .from("encargos")
     .select("*")
-    .neq("estado", "en_cola")
+    .not("estado", "in", "(en_cola,en_curso,error,esperando_respuesta)")
     .order("actualizado_en", { ascending: false })
     .limit(limite)
     .returns<Encargo[]>();
@@ -302,6 +357,109 @@ export async function cancelarEncargo(id: string): Promise<void> {
     .select("id");
   if (error) throw new Error(`No se pudo cancelar: ${error.message}`);
   if (!data?.length) throw new Error("Este encargo ya ha empezado o ya no está en la cola.");
+}
+
+/* ───────────── Reparto: tareas, respuestas y reintentos ───────────── */
+
+/** Minutos "en curso" sin avanzar a partir de los cuales el encargo se da por atascado ("Reanudar"). */
+export const MINUTOS_ATASCADO = 10;
+
+export function estaAtascado(e: Pick<Encargo, "estado" | "actualizado_en" | "reintentar_en">): boolean {
+  return e.estado === "en_curso" && !e.reintentar_en && Date.now() - Date.parse(e.actualizado_en) > MINUTOS_ATASCADO * 60_000;
+}
+
+export type TareaVista = Pick<Tarea, "id" | "instrucciones" | "creado_en"> & { encargo: EncargoVista };
+
+/** Tareas pendientes de un agente, de la más antigua a la más reciente, con el proyecto y los adjuntos de su encargo. */
+export async function cargarTareasPendientes(agenteId: string): Promise<TareaVista[]> {
+  const db = supabase();
+  const { data: tareas, error } = await db
+    .from("tareas")
+    .select("*")
+    .eq("agente_id", agenteId)
+    .eq("estado", "pendiente" satisfies EstadoTarea)
+    .order("creado_en")
+    .returns<Tarea[]>();
+  if (error) throw new Error(`No se pudieron leer las tareas: ${error.message}. ¿Has ejecutado la migración 0010?`);
+  if (!tareas?.length) return [];
+
+  const { data: encargos, error: e2 } = await db
+    .from("encargos")
+    .select("*")
+    .in("id", [...new Set(tareas.map((t) => t.encargo_id))])
+    .returns<Encargo[]>();
+  if (e2) throw new Error(`No se pudieron leer los encargos: ${e2.message}`);
+  const porId = new Map((await paraMostrar(encargos ?? [])).map((e) => [e.id, e]));
+  return tareas.flatMap((t) => {
+    const encargo = porId.get(t.encargo_id);
+    return encargo ? [{ id: t.id, instrucciones: t.instrucciones, creado_en: t.creado_en, encargo }] : [];
+  });
+}
+
+/**
+ * Mi respuesta a la pregunta del Director: el encargo vuelve a la cola, el primero de su grupo
+ * (urgentes o normales), para que vuelva a decidir con el dato que faltaba.
+ */
+export async function responderPregunta(id: string, respuesta: string): Promise<void> {
+  const texto = respuesta.replace(/\r\n/g, "\n").trim();
+  if (!texto) throw new Error("Escribe tu respuesta.");
+  if (texto.length > MAX_CARACTERES_ENCARGO) throw new Error(`Máximo ${MAX_CARACTERES_ENCARGO.toLocaleString("es-ES")} caracteres.`);
+
+  const db = supabase();
+  const { data: encargo, error } = await db
+    .from("encargos")
+    .select("*")
+    .eq("id", id)
+    .eq("estado", "esperando_respuesta" satisfies EstadoEncargo)
+    .maybeSingle<Encargo>();
+  if (error) throw new Error(`No se pudo leer el encargo: ${error.message}`);
+  if (!encargo) throw new Error("Este encargo ya no está esperando respuesta.");
+
+  const preguntas = [...(encargo.preguntas ?? [])];
+  const ultima = preguntas.at(-1);
+  if (ultima && ultima.respuesta === null) preguntas[preguntas.length - 1] = { ...ultima, respuesta: texto };
+  else preguntas.push({ pregunta: "(sin pregunta)", respuesta: texto });
+
+  const { data: primero } = await db
+    .from("encargos")
+    .select("orden")
+    .eq("estado", "en_cola" satisfies EstadoEncargo)
+    .eq("urgente", encargo.urgente)
+    .order("orden")
+    .limit(1)
+    .returns<{ orden: number }[]>();
+  const orden = Math.min(primero?.[0]?.orden ?? encargo.orden, encargo.orden) - 1;
+
+  const { data, error: e2 } = await db
+    .from("encargos")
+    .update({ preguntas, orden, estado: "en_cola" satisfies EstadoEncargo })
+    .eq("id", id)
+    .eq("estado", "esperando_respuesta" satisfies EstadoEncargo)
+    .select("id");
+  if (e2) throw new Error(`No se pudo guardar la respuesta: ${e2.message}`);
+  if (!data?.length) throw new Error("Este encargo ya no está esperando respuesta.");
+}
+
+/** "Reintentar" (encargo en error) o "Reanudar" (atascado en curso): el Director vuelve a empezar con él. */
+export async function reanudarEncargo(id: string): Promise<void> {
+  const db = supabase();
+  const { data: encargo, error } = await db.from("encargos").select("*").eq("id", id).maybeSingle<Encargo>();
+  if (error) throw new Error(`No se pudo leer el encargo: ${error.message}`);
+  if (!encargo || !(encargo.estado === "error" || estaAtascado(encargo))) {
+    throw new Error("Este encargo ya no necesita reintentarse.");
+  }
+  const { error: e2 } = await db
+    .from("encargos")
+    .update({
+      estado: "en_curso" satisfies EstadoEncargo,
+      reintentar_en: new Date().toISOString(),
+      paso_hasta: null,
+      reintentos: 0,
+      aviso: null,
+    })
+    .eq("id", id)
+    .eq("estado", encargo.estado);
+  if (e2) throw new Error(`No se pudo reanudar: ${e2.message}`);
 }
 
 /** El Director de la oficina (activo y en su despacho), o null si `agenteId` no lo es. */
