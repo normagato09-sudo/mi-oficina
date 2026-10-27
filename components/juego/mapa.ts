@@ -137,7 +137,9 @@ function centroX(s: Sala) {
 const sala = (id: IdSala) => SALAS.find((s) => s.id === id)!;
 
 /** Dónde se sienta cada agente (casilla de su silla): centrados en su despacho, 4 casillas entre mesas. */
-export function puestos(agentes: { id: string; despacho: Despacho }[]): Puesto[] {
+export function puestos(todos: { id: string; despacho: Despacho }[]): Puesto[] {
+  // Los jefes de planta no tienen sala en este plano.
+  const agentes = todos.filter((a) => a.despacho !== "jefatura") as { id: string; despacho: Exclude<Despacho, "jefatura"> }[];
   return agentes.map((a) => {
     const s = sala(a.despacho);
     const suyos = agentes.filter((b) => b.despacho === a.despacho);
@@ -159,6 +161,7 @@ const MESA: Record<Despacho, (x: number, y: number) => Objeto[]> = {
   traduccion: (x, y) => [{ prop: "portatil", x, y, encima: true }],
   redes: (x, y) => [{ prop: "telefono", x, y, encima: true }],
   direccion: (x, y) => [{ prop: "papeles", x: x + 1, y, encima: true }, { prop: "portatil", x: x - 0.4, y, encima: true }],
+  jefatura: (x, y) => [{ prop: "portatil", x, y, encima: true }],
 };
 
 /** Todo lo que hay en cada sala, con una mesa por puesto. */

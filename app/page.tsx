@@ -84,7 +84,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               </div>
             }
             clasica={<Oficina datos={datos} enCola={datos.enCola} proyectoCartel={proyectoCartel} equipoAbierto={equipoAbierto} />}
-            agentes={datos.agentes.map((a) => {
+            agentes={datos.agentes.filter((a) => a.despacho !== "jefatura").map((a) => {
               const estado = estadoAgente(a, a.despacho === "direccion" ? datos.enCola : 0);
               return {
                 id: a.id,

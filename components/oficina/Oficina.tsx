@@ -45,7 +45,7 @@ const abajo = (i: number): Sala => ({
 });
 
 /** Fila de arriba: Dirección (la más grande), Redes, Traducción y Redacción. Fila de abajo: los otros cinco. */
-const SALAS: Record<Despacho, Sala> = {
+const SALAS: Record<Exclude<Despacho, "jefatura">, Sala> = {
   direccion: { x: 24, y: Y_ARRIBA, ancho: 446, puerta: 360 },
   redes: { x: 482, y: Y_ARRIBA, ancho: 290, puerta: 24 },
   traduccion: { x: 784, y: Y_ARRIBA, ancho: 290, puerta: 24 },
@@ -91,11 +91,19 @@ const ASPECTOS: Record<Despacho, Aspecto> = {
   secretaria: { camiseta: "#8e5aa8", sombra: "#6e4386", pelo: "#3b2a20", piel: "#e8b894", peinado: "largo" },
   diseno: { camiseta: "#e07b39", sombra: "#b8602a", pelo: "#c0392b", piel: "#f1c7a1", peinado: "largo" },
   informes: { camiseta: "#3c8d5a", sombra: "#2c6c44", pelo: "#8a8a8a", piel: "#8d5a3b", peinado: "corto" },
+  jefatura: { camiseta: "#4a4f63", sombra: "#363a4a", pelo: "#3b2a20", piel: "#e8b894", peinado: "corto" },
+};
+
+/** Los jefes de planta, uno distinto por planta (solo se ven en el juego). */
+const ASPECTOS_JEFES: Record<number, Aspecto> = {
+  1: { camiseta: "#2f7f78", sombra: "#22605a", pelo: "#c9a26b", piel: "#f1c7a1", peinado: "mono" },
+  2: { camiseta: "#3d4a66", sombra: "#2c364c", pelo: "#1c1714", piel: "#c68a5e", peinado: "corto", corbata: "#5fa8d3" },
+  3: { camiseta: "#b5476a", sombra: "#8e3653", pelo: "#2a1d17", piel: "#8d5a3b", peinado: "largo" },
 };
 
 /** Aspecto del muñeco y de su pantalla según el despacho del agente. */
 export function estiloAgente(agente: AgenteConEstado, corbata: string): { aspecto: Aspecto; marca: string } {
-  const aspecto = ASPECTOS[agente.despacho];
+  const aspecto = (agente.despacho === "jefatura" && ASPECTOS_JEFES[agente.planta ?? 0]) || ASPECTOS[agente.despacho];
   if (agente.despacho === "direccion") return { marca: "direccion", aspecto: { ...aspecto, corbata } };
   if (agente.despacho === "redes") return { marca: "instagram", aspecto };
   return { marca: agente.despacho, aspecto };
@@ -211,7 +219,7 @@ function xPuesto(i: number, total: number, ancho: number): number {
 }
 
 /** Despacho con paredes de cristal, ventana y puerta al pasillo. */
-function DespachoSala({ despacho, agentes, children }: { despacho: Despacho; agentes: number; children: ReactNode }) {
+function DespachoSala({ despacho, agentes, children }: { despacho: keyof typeof SALAS; agentes: number; children: ReactNode }) {
   const { x, y, ancho, puerta, abajo } = SALAS[despacho];
   return (
     <div
@@ -376,7 +384,8 @@ function decoracion(despacho: Despacho, props: Props): ReactNode {
 export default function Oficina(props: Props) {
   const { datos, enCola } = props;
   const corbata = props.proyectoCartel ? letreroDe(props.proyectoCartel).colorSecundario : "#F5B841";
-  const despachos = Object.keys(SALAS) as Despacho[];
+  // Los jefes de planta solo están en el juego.
+  const despachos = Object.keys(SALAS) as (keyof typeof SALAS)[];
 
   return (
     <Lienzo ancho={ANCHO} alto={ALTO}>

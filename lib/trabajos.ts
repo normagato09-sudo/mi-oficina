@@ -7,7 +7,8 @@ import type { EsquemaJSON } from "./ia";
 import type { Despacho } from "./tipos";
 
 /** Despachos que trabajan en tareas (todos menos Dirección). */
-export type DespachoTrabajo = Exclude<Despacho, "direccion">;
+/** Despachos que hacen tareas: todos menos Dirección y las jefaturas (que aún no trabajan). */
+export type DespachoTrabajo = Exclude<Despacho, "direccion" | "jefatura">;
 
 /** Qué puede entregar cada agente. El Director recibe esta lista y solo pide entregas de aquí. */
 export const ENTREGAS: Record<DespachoTrabajo, string> = {

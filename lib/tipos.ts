@@ -33,7 +33,9 @@ export type Despacho =
   | "ciberseguridad"
   | "secretaria"
   | "diseno"
-  | "informes";
+  | "informes"
+  /** Jefe de una planta (migración 0013): de momento no trabaja. */
+  | "jefatura";
 
 export type Departamento = {
   id: string;
@@ -48,6 +50,8 @@ export type Agente = {
   departamento_id: string | null;
   /** Despacho de la oficina donde trabaja (migración 0007). */
   despacho?: Despacho | null;
+  /** Planta del edificio (migración 0013; si falta, la de su despacho: ver lib/plantas.ts). */
+  planta?: number | null;
   nombre: string;
   tipo: "redes" | "direccion" | "comunicacion" | "administracion" | "rrhh" | Despacho;
   instrucciones: string;
