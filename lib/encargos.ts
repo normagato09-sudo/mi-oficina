@@ -196,9 +196,41 @@ export async function crearEncargo({ director, proyectoId, texto, urgente, subid
     if (!RUTA_SUBIDA.test(s.ruta) || !esTipoAdjunto(s.tipo)) throw new Error("Adjunto no válido.");
   }
 
-  const db = supabase();
-  const almacen = db.storage.from(BUCKET_ENCARGOS);
   const id = randomUUID();
+  await conAdjuntos(subidas, `${proyectoId}/${id}`, async (adjuntos) => {
+    // El orden lo pone la base de datos: al final de la cola.
+    const { error } = await supabase().from("encargos").insert({
+      id,
+      edificio_id: proyectoId,
+      director_id: director.id,
+      texto: textoLimpio,
+      adjuntos,
+      urgente,
+      estado: "en_cola" satisfies EstadoEncargo,
+    });
+    if (error) throw new Error(`No se pudo guardar el encargo: ${error.message}`);
+  });
+  return id;
+}
+
+/** Comprueba que las subidas son las que preparó `prepararSubidas`. */
+export function comprobarSubidas(subidas: { ruta: string; tipo: string }[]): void {
+  if (subidas.length > MAX_ADJUNTOS) throw new Error(`Como máximo ${MAX_ADJUNTOS} archivos.`);
+  for (const s of subidas) {
+    if (!RUTA_SUBIDA.test(s.ruta) || !esTipoAdjunto(s.tipo)) throw new Error("Adjunto no válido.");
+  }
+}
+
+/**
+ * Convierte las subidas en adjuntos (imágenes a JPEG en `carpeta`, texto de los PDF) y llama a `guardar`.
+ * Si algo falla, borra las imágenes ya guardadas; los originales subidos se borran siempre.
+ */
+export async function conAdjuntos(
+  subidas: { ruta: string; nombre: string; tipo: string }[],
+  carpeta: string,
+  guardar: (adjuntos: Adjunto[]) => Promise<void>,
+): Promise<void> {
+  const almacen = supabase().storage.from(BUCKET_ENCARGOS);
   const guardadas: string[] = [];
 
   try {
@@ -218,25 +250,14 @@ export async function crearEncargo({ director, proyectoId, texto, urgente, subid
         const { jpeg, ancho, alto } = await procesarImagen(original).catch(() => {
           throw new Error(`No se pudo leer la imagen "${subida.nombre}".`);
         });
-        const ruta = `${proyectoId}/${id}/${++n}.jpg`;
+        const ruta = `${carpeta}/${++n}.jpg`;
         const { error: e2 } = await almacen.upload(ruta, jpeg, { contentType: "image/jpeg" });
         if (e2) throw new Error(`No se pudo guardar "${subida.nombre}": ${e2.message}`);
         guardadas.push(ruta);
         adjuntos.push({ tipo: "imagen", nombre: subida.nombre, ruta, ancho, alto });
       }
     }
-
-    // El orden lo pone la base de datos: al final de la cola.
-    const { error } = await db.from("encargos").insert({
-      id,
-      edificio_id: proyectoId,
-      director_id: director.id,
-      texto: textoLimpio,
-      adjuntos,
-      urgente,
-      estado: "en_cola" satisfies EstadoEncargo,
-    });
-    if (error) throw new Error(`No se pudo guardar el encargo: ${error.message}`);
+    await guardar(adjuntos);
   } catch (e) {
     if (guardadas.length) await almacen.remove(guardadas);
     throw e;
@@ -244,7 +265,15 @@ export async function crearEncargo({ director, proyectoId, texto, urgente, subid
     // Los originales ya no hacen falta (ni si ha ido bien ni si ha fallado).
     if (subidas.length) await almacen.remove(subidas.map((s) => s.ruta));
   }
-  return id;
+}
+
+/** Firma las miniaturas de unas imágenes adjuntas (bucket privado), válidas una hora. */
+export async function firmarImagenes(rutas: string[]): Promise<Map<string, string>> {
+  const urls = new Map<string, string>();
+  if (!rutas.length) return urls;
+  const { data: firmadas } = await supabase().storage.from(BUCKET_ENCARGOS).createSignedUrls(rutas, 3600);
+  for (const f of firmadas ?? []) if (f.path && f.signedUrl) urls.set(f.path, f.signedUrl);
+  return urls;
 }
 
 /* ───────────── Leer la cola ───────────── */
@@ -267,13 +296,7 @@ type FilaVista = Encargo & {
 
 /** Firma las miniaturas (una sola petición, solo si hay imágenes) y da forma a cada encargo. */
 async function paraMostrar(encargos: FilaVista[]): Promise<EncargoVista[]> {
-  const rutas = encargos.flatMap((e) => e.adjuntos.flatMap((a) => (a.tipo === "imagen" ? [a.ruta] : [])));
-  const urls = new Map<string, string>();
-  if (rutas.length) {
-    // Miniaturas: URLs firmadas (el bucket es privado), válidas una hora.
-    const { data: firmadas } = await supabase().storage.from(BUCKET_ENCARGOS).createSignedUrls(rutas, 3600);
-    for (const f of firmadas ?? []) if (f.path && f.signedUrl) urls.set(f.path, f.signedUrl);
-  }
+  const urls = await firmarImagenes(encargos.flatMap((e) => e.adjuntos.flatMap((a) => (a.tipo === "imagen" ? [a.ruta] : []))));
 
   return encargos.map(({ edificios, tareas, ...e }) => ({
     ...e,

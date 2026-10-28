@@ -10,7 +10,7 @@ type Props = {
   directorId?: string;
   avisos?: Aviso[];
   /** Panel de la cabecera que está abierto: su botón lo cierra. */
-  panel?: "organizaciones";
+  panel?: "organizaciones" | "proyectos";
 };
 
 export default function Header({ directorId, avisos = [], panel }: Props) {
@@ -31,6 +31,15 @@ export default function Header({ directorId, avisos = [], panel }: Props) {
           className="btn-secondary"
         >
           Organizaciones
+        </Link>
+
+        <Link
+          href={panel === "proyectos" ? "/" : "/?panel=proyectos"}
+          scroll={false}
+          aria-current={panel === "proyectos" ? "true" : undefined}
+          className="btn-secondary"
+        >
+          Proyectos
         </Link>
 
         {directorId && <BotonNuevoEncargo directorId={directorId} />}

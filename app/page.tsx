@@ -8,11 +8,13 @@ import PanelFicha from "@/components/ficha/PanelFicha";
 import { SinFicha } from "@/components/ficha/navegacion";
 import PanelEquipo from "@/components/panel/PanelEquipo";
 import PanelOrganizaciones from "@/components/panel/PanelOrganizaciones";
+import PanelProyectos from "@/components/proyectos/PanelProyectos";
 import { avanzarCola } from "@/lib/cola";
 import { cargarAprendizajesEquipo } from "@/lib/aprendizajes";
 import { cargarOficina, cargarTodasLasOrganizaciones, type DatosOficina } from "@/lib/datos";
 import { estadoAgente, plural } from "@/lib/estado";
 import { plantaDe } from "@/lib/plantas";
+import { cargarProyecto, cargarProyectos } from "@/lib/proyectos";
 import type { Edificio } from "@/lib/tipos";
 
 /** La cola del Director corre en segundo plano (after) en la página y en sus acciones: hasta 60 s. */
@@ -31,9 +33,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   let todasLasOrganizaciones: Edificio[] | undefined;
   let aprendizajes: Awaited<ReturnType<typeof cargarAprendizajesEquipo>> = {};
   let errorOrganizaciones: string | null = null;
+  let panelProyectos: Parameters<typeof PanelProyectos>[0] | undefined;
+  const proyectoAbierto = typeof params.proyecto === "string" ? params.proyecto : undefined;
   try {
-    // Todo a la vez: la oficina y, si están abiertos, el panel "Organizaciones" o la carpeta "Equipo".
-    [datos, todasLasOrganizaciones, aprendizajes] = await Promise.all([
+    // Todo a la vez: la oficina y, si están abiertos, el panel "Organizaciones", el de "Proyectos" o la carpeta "Equipo".
+    [datos, todasLasOrganizaciones, aprendizajes, panelProyectos] = await Promise.all([
       cargarOficina(),
       panel === "organizaciones"
         ? cargarTodasLasOrganizaciones().catch((e: unknown) => {
@@ -42,6 +46,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           })
         : undefined,
       panel === "equipo" ? cargarAprendizajesEquipo() : {},
+      panel === "proyectos" ? cargarPanelProyectos(proyectoAbierto) : undefined,
     ]);
   } catch (e) {
     return (
@@ -70,7 +75,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     <>
       {/* Mientras el Director trabaja (o hay cola que puede empezar), se mira si algo cambia. */}
       <AutoRefresco activo={datos.hayEnCurso} firma={datos.firma} />
-      <Header directorId={director?.id} avisos={datos.avisos} panel={panel === "organizaciones" ? "organizaciones" : undefined} />
+      <Header directorId={director?.id} avisos={datos.avisos} panel={panel === "organizaciones" || panel === "proyectos" ? panel : undefined} />
       <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-6 py-4">
         <main className="min-w-0 flex-1">
           <VistaOficina
@@ -115,6 +120,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
               {errorOrganizaciones}
             </p>
           )}
+          {panelProyectos && (
+            <PanelProyectos
+              {...(panelProyectos.vista === "nuevo"
+                ? { vista: "nuevo", organizaciones: datos.organizaciones.map((o) => ({ id: o.id, nombre: o.nombre })) }
+                : panelProyectos)}
+            />
+          )}
           {equipoAbierto && <PanelEquipo agentes={datos.agentes} aprendizajes={aprendizajes} />}
         </SinFicha>
 
@@ -131,4 +143,15 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       </div>
     </>
   );
+}
+
+/** Lo que enseña el panel "Proyectos": la lista, el formulario nuevo o un proyecto. Nunca lanza (sin la migración 0015, un aviso). */
+async function cargarPanelProyectos(abierto: string | undefined): Promise<Parameters<typeof PanelProyectos>[0]> {
+  try {
+    if (abierto === "nuevo") return { vista: "nuevo", organizaciones: [] };
+    if (abierto) return { vista: "detalle", proyecto: await cargarProyecto(abierto) };
+    return { vista: "lista", proyectos: await cargarProyectos() };
+  } catch (e) {
+    return { vista: "error", error: e instanceof Error ? e.message : String(e) };
+  }
 }
