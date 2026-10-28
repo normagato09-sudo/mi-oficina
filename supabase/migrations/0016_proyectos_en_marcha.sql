@@ -145,3 +145,23 @@ revoke all on function public.tomar_turno_ia(uuid, integer) from public, anon, a
 grant execute on function public.tomar_turno_ia(uuid, integer) to service_role;
 revoke all on function public.soltar_turno_ia(uuid) from public, anon, authenticated;
 grant execute on function public.soltar_turno_ia(uuid) to service_role;
+
+-- ─────────────────────────────────────────────
+-- 5) Perfiles: "proyecto" → "organización" donde se refiere a CIFA, Defensem…
+--    (solo frases concretas; se puede volver a ejecutar: la segunda vez ya no encuentra nada)
+-- ─────────────────────────────────────────────
+
+update public.agentes set instrucciones = replace(instrucciones, 'Trabajas para varios proyectos, como si fueran clientes', 'Trabajas para varias organizaciones, como si fueran clientes') where instrucciones like '%Trabajas para varios proyectos, como si fueran clientes%';
+update public.agentes set instrucciones = replace(instrucciones, 'lees la ficha de su proyecto', 'lees la ficha de su organización') where instrucciones like '%lees la ficha de su proyecto%';
+update public.agentes set instrucciones = replace(instrucciones, 'el idioma y el tono sean los del proyecto', 'el idioma y el tono sean los de la organización') where instrucciones like '%el idioma y el tono sean los del proyecto%';
+update public.agentes set instrucciones = replace(instrucciones, 'la cuenta de Instagram del proyecto de cada encargo', 'la cuenta de Instagram de la organización de cada encargo') where instrucciones like '%la cuenta de Instagram del proyecto de cada encargo%';
+update public.agentes set instrucciones = replace(instrucciones, 'la ficha de ese proyecto', 'la ficha de esa organización') where instrucciones like '%la ficha de ese proyecto%';
+update public.agentes set instrucciones = replace(instrucciones, 'Adaptas el tono al proyecto y al destinatario', 'Adaptas el tono a la organización y al destinatario') where instrucciones like '%Adaptas el tono al proyecto y al destinatario%';
+update public.agentes set instrucciones = replace(instrucciones, 'el trabajo de todos los proyectos', 'el trabajo de todas las organizaciones') where instrucciones like '%el trabajo de todos los proyectos%';
+update public.agentes set instrucciones = replace(instrucciones, 'Organizas el informe por proyecto', 'Organizas el informe por organización') where instrucciones like '%Organizas el informe por proyecto%';
+update public.agentes set instrucciones = replace(instrucciones, 'las webs de los proyectos', 'las webs de las organizaciones') where instrucciones like '%las webs de los proyectos%';
+update public.agentes set instrucciones = replace(instrucciones, 'el tono de cada proyecto', 'el tono de cada organización') where instrucciones like '%el tono de cada proyecto%';
+update public.agentes set instrucciones = replace(instrucciones, 'el estilo de cada proyecto', 'el estilo de cada organización') where instrucciones like '%el estilo de cada proyecto%';
+update public.agentes set instrucciones = replace(instrucciones, 'para cada proyecto y red social', 'para cada organización y red social') where instrucciones like '%para cada proyecto y red social%';
+update public.agentes set instrucciones = replace(instrucciones, 'al tono de cada proyecto', 'al tono de cada organización') where instrucciones like '%al tono de cada proyecto%';
+-- El Programador ("al lenguaje y al proyecto que te pidan") y el Estratega hablan de trabajos: se quedan igual.
