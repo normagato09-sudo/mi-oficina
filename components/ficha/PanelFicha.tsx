@@ -10,6 +10,7 @@ import HistorialEncargos from "@/components/encargos/HistorialEncargos";
 import RepartoDirector from "@/components/encargos/RepartoDirector";
 import TareasAgente from "@/components/encargos/TareasAgente";
 import PlantillasCartel, { type ProyectoCartel } from "@/components/carteles/PlantillasCartel";
+import ProyectosDirector from "@/components/proyectos/ProyectosDirector";
 import type { AgenteConEstado } from "@/lib/datos";
 import type { DatosFicha } from "@/lib/ficha";
 
@@ -85,6 +86,7 @@ export default function PanelFicha({ agentes, colores, proyectos, enCola, firma 
       ) : suya.datos?.tipo === "director" ? (
         <>
           <RepartoDirector activos={suya.datos.activos} />
+          <ProyectosDirector proyectos={suya.datos.proyectos} />
           <ColaDirector cola={suya.datos.cola} />
           <HistorialEncargos encargos={suya.datos.historial} />
         </>

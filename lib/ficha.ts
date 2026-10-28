@@ -1,5 +1,7 @@
 import "server-only";
 import { cargarActivos, cargarCola, cargarHistorial, cargarTareasAgente, estaAtascado, type EncargoVista, type TareaVista } from "./encargos";
+import { cargarProyectos, type ProyectoResumen } from "./proyectos";
+import { ESTADOS_CERRADOS } from "./proyectos-reglas";
 import type { FotoEncargo } from "@/components/carteles/PlantillasCartel";
 
 
@@ -10,6 +12,8 @@ export type DatosFicha =
       activos: (EncargoVista & { atascado: boolean })[];
       cola: EncargoVista[];
       historial: EncargoVista[];
+      /** Proyectos sin terminar (sus planes): enlazan al panel "Proyectos". */
+      proyectos: ProyectoResumen[];
     }
   | {
       tipo: "agente";
@@ -30,8 +34,20 @@ export type TipoFicha = "director" | "diseno" | "agente";
 /** Datos de la ficha de un agente. Todas las consultas van a la vez (una sola ronda, más las miniaturas). */
 export async function cargarFicha(agenteId: string, tipo: TipoFicha): Promise<DatosFicha> {
   if (tipo === "director") {
-    const [activos, cola, historial] = await Promise.all([cargarActivos(), cargarCola(), cargarHistorial()]);
-    return { tipo: "director", activos: activos.map((e) => ({ ...e, atascado: estaAtascado(e) })), cola, historial };
+    const [activos, cola, historial, proyectos] = await Promise.all([
+      cargarActivos(),
+      cargarCola(),
+      cargarHistorial(),
+      // Sin la migración 0015 no hay proyectos: la ficha se abre igual.
+      cargarProyectos().catch((): ProyectoResumen[] => []),
+    ]);
+    return {
+      tipo: "director",
+      activos: activos.map((e) => ({ ...e, atascado: estaAtascado(e) })),
+      cola,
+      historial,
+      proyectos: proyectos.filter((p) => !ESTADOS_CERRADOS.includes(p.estado)),
+    };
   }
 
   const esDisenador = tipo === "diseno";

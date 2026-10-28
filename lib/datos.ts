@@ -1,6 +1,7 @@
 import "server-only";
 import { NOMBRE_DESPACHO, ORDEN_DESPACHOS } from "./despachos";
-import { estadoAgente, type ResumenReparto, type ResumenTareas } from "./estado";
+import { estadoAgente, type ResumenPlanes, type ResumenReparto, type ResumenTareas } from "./estado";
+import type { EstadoProyecto } from "./proyectos-reglas";
 import { LimiteIAError, MENSAJE_LIMITE } from "./ia";
 import { supabase } from "./supabase";
 import type { Agente, Aviso, Despacho, Edificio, EstadoPublicacion, Publicacion } from "./tipos";
@@ -120,7 +121,7 @@ async function consultarActividad() {
   const db = supabase();
   // Sin la migración 0010 no hay tareas ni estos estados: todo a cero (no se lanza error).
   const hace14Dias = new Date(Date.now() - 14 * 24 * 3600_000).toISOString();
-  const [publicaciones, tareasRes, activos, cola, avisos, ultimoEncargo, ultimaTarea, aprobadas] = await Promise.all([
+  const [publicaciones, tareasRes, activos, cola, avisos, ultimoEncargo, ultimaTarea, aprobadas, proyectosRes, ultimoProyecto] = await Promise.all([
     db
       .from("publicaciones")
       .select("agente_id, estado, actualizado_en")
@@ -149,8 +150,24 @@ async function consultarActividad() {
       .eq("estado", "aprobada")
       .gte("aprobada_en", hace14Dias)
       .returns<{ agente_id: string; aprobada_en: string }[]>(),
+    // Proyectos sin terminar (migración 0015; si falta, ninguno): el plan del Director y sus luces.
+    db
+      .from("proyectos")
+      .select("estado, aviso, aprobado_en")
+      .not("estado", "in", "(terminado,cancelado)")
+      .returns<{ estado: EstadoProyecto; aviso: string | null; aprobado_en: string | null }[]>(),
+    db.from("proyectos").select("actualizado_en").order("actualizado_en", { ascending: false }).limit(1).returns<{ actualizado_en: string }[]>(),
   ]);
   if (publicaciones.error) throw new Error(`No se pudieron leer las publicaciones: ${publicaciones.error.message}`);
+
+  const proyectos = proyectosRes.data ?? [];
+  const planFallido = proyectos.find((p) => p.estado === "borrador" && p.aviso);
+  const planes: ResumenPlanes = {
+    haciendo: proyectos.some((p) => p.estado === "borrador" && !p.aviso),
+    paraRevisar: proyectos.filter((p) => p.estado === "plan_revision").length,
+    preguntas: proyectos.filter((p) => p.estado === "esperando_respuesta").length,
+    error: planFallido ? (planFallido.aviso!.startsWith(MENSAJE_LIMITE) ? "Límite de la IA: reintenta el plan" : "Error en un plan") : null,
+  };
 
   const filas = activos.data ?? [];
   const enError = filas.find((e) => e.estado === "error");
@@ -160,12 +177,15 @@ async function consultarActividad() {
     revisando: tareas.some((t) => t.estado === "revisando"),
     esperando: filas.filter((e) => e.estado === "esperando_respuesta").length,
     error: enError ? (enError.aviso?.startsWith(MENSAJE_LIMITE) ? "Límite de la IA: reintenta" : "Error al repartir") : null,
+    planes,
   };
   const enCola = cola.count ?? 0;
   return {
     publicaciones: publicaciones.data ?? [],
     tareas,
     aprobadas: aprobadas.data ?? [],
+    /** Cuándo aprobé cada plan (luz verde del Director hasta que abra su ficha). */
+    planesAprobados: proyectos.flatMap((p) => (p.aprobado_en && Date.parse(p.aprobado_en) >= Date.parse(hace14Dias) ? [p.aprobado_en] : [])),
     reparto,
     enCola,
     avisosSinLeer: avisos.count ?? 0,
@@ -174,8 +194,9 @@ async function consultarActividad() {
     /** Hay que seguir mirando: el Director o el equipo trabajan, o hay cola que puede empezar. */
     activo:
       reparto.enCurso ||
+      planes.haciendo ||
       (!reparto.error && (enCola > 0 || tareas.some((t) => ["pendiente", "en_curso", "revision", "revisando"].includes(t.estado)))),
-    ultimoCambio: [ultimoEncargo.data?.[0]?.actualizado_en, ultimaTarea.data?.[0]?.actualizado_en].join("|"),
+    ultimoCambio: [ultimoEncargo.data?.[0]?.actualizado_en, ultimaTarea.data?.[0]?.actualizado_en, ultimoProyecto.data?.[0]?.actualizado_en].join("|"),
   };
 }
 
@@ -191,7 +212,9 @@ function resumenTareas(tareas: { estado: string }[]): ResumenTareas {
   };
 }
 
-/** Cada agente con el recuento de sus publicaciones, sus tareas y (el Director) el reparto. */
+const esDirector = (a: FilaAgente) => a.despacho === "direccion" && a.tipo === "direccion";
+
+/** Cada agente con el recuento de sus publicaciones, sus tareas y (el Director) el reparto y los planes. */
 function conEstados(equipo: FilaAgente[], actividad: Actividad): AgenteConEstado[] {
   return equipo.map((a) => {
     const suyas = actividad.publicaciones.filter((p) => p.agente_id === a.id);
@@ -202,9 +225,10 @@ function conEstados(equipo: FilaAgente[], actividad: Actividad): AgenteConEstado
         (a.visto_en
           ? suyas.filter((p) => p.estado === "publicada" && Date.parse(p.actualizado_en) > Date.parse(a.visto_en!)).length
           : 0) +
-        actividad.aprobadas.filter((t) => t.agente_id === a.id && (!a.visto_en || Date.parse(t.aprobada_en) > Date.parse(a.visto_en))).length,
+        actividad.aprobadas.filter((t) => t.agente_id === a.id && (!a.visto_en || Date.parse(t.aprobada_en) > Date.parse(a.visto_en))).length +
+        (esDirector(a) ? actividad.planesAprobados.filter((f) => !a.visto_en || Date.parse(f) > Date.parse(a.visto_en)).length : 0),
       tareas: resumenTareas(actividad.tareas.filter((t) => t.agente_id === a.id)),
-      ...(a.despacho === "direccion" && a.tipo === "direccion" ? { reparto: actividad.reparto } : {}),
+      ...(esDirector(a) ? { reparto: actividad.reparto } : {}),
     };
   });
 }

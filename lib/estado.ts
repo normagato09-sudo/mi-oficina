@@ -14,6 +14,20 @@ export type ResumenReparto = {
   esperando: number;
   /** Texto corto si el encargo en curso ha fallado (se ve en rojo), o null. */
   error: string | null;
+  /** Los planes de los proyectos (migración 0015). */
+  planes?: ResumenPlanes;
+};
+
+/** Cómo van los planes de los proyectos del Director. */
+export type ResumenPlanes = {
+  /** Está haciendo (o rehaciendo) un plan. */
+  haciendo: boolean;
+  /** Planes esperando que los revise. */
+  paraRevisar: number;
+  /** Proyectos en los que me ha hecho preguntas. */
+  preguntas: number;
+  /** Texto corto si un plan ha fallado, o null. */
+  error: string | null;
 };
 
 /** Tareas de un agente según su paso. */
@@ -59,12 +73,17 @@ export function estadoAgente(
   // La IA no ha podido trabajar (p. ej. límite gratuito alcanzado): también te necesita.
   if (agente.aviso_ia) return { ...base, luz: "rojo", texto: agente.aviso_ia };
   if (reparto?.error) return { ...base, luz: "rojo", texto: reparto.error };
-  if (reparto?.esperando) return { ...base, luz: "rojo", texto: reparto.esperando === 1 ? "Te ha hecho una pregunta" : `${reparto.esperando} preguntas para ti` };
+  const planes = reparto?.planes;
+  if (planes?.error) return { ...base, luz: "rojo", texto: planes.error };
+  const esperando = (reparto?.esperando ?? 0) + (planes?.preguntas ?? 0);
+  if (esperando) return { ...base, luz: "rojo", texto: esperando === 1 ? "Te ha hecho una pregunta" : `${esperando} preguntas para ti` };
+  if (planes?.paraRevisar) return { ...base, luz: "rojo", texto: planes.paraRevisar === 1 ? "Plan para revisar" : `${planes.paraRevisar} planes para revisar` };
   const tareas = agente.tareas;
   // Su trabajo está revisado y listo: te necesita.
   if (tareas?.listas) return { ...base, luz: "rojo", texto: "Te necesita" };
   if (reparto?.enCurso) return { ...base, trabajando: true, luz: "amarillo", texto: "Repartiendo…" };
   if (reparto?.revisando) return { ...base, trabajando: true, luz: "amarillo", texto: "Revisando…" };
+  if (planes?.haciendo) return { ...base, trabajando: true, luz: "amarillo", texto: "Haciendo un plan…" };
   if (tareas?.trabajando) return { ...base, trabajando: true, luz: "amarillo", texto: "Trabajando…" };
   if (estados.lista > 0) return { ...base, luz: "rojo", texto: "Te necesita" };
   if (estados.error > 0) return { ...base, luz: "rojo", texto: "Error" };

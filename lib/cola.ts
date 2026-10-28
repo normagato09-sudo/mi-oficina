@@ -1,12 +1,13 @@
 import "server-only";
 import { MAX_PARA_EMPEZAR_MS } from "./pasos";
+import { procesarProyecto, tomarProyectoListo } from "./plan";
 import { procesarEncargo, tomarEncargoListo } from "./reparto";
 import { supabase } from "./supabase";
 import { procesarTarea, tomarTareaLista } from "./trabajo";
 
 /**
  * Cola automática de la oficina, de un paso en un paso (urgentes primero):
- *   1. el Director reparte el encargo en curso (lib/reparto.ts),
+ *   1. el Director reparte el encargo en curso (lib/reparto.ts) o hace el plan de un proyecto (lib/plan.ts),
  *   2. los agentes hacen sus tareas y el Director las revisa (lib/trabajo.ts),
  *   3. cuando el encargo está listo para revisar, se empieza el siguiente de la cola.
  *
@@ -31,6 +32,12 @@ export async function avanzarCola(): Promise<void> {
       const encargo = await tomarEncargoListo();
       if (encargo) {
         await procesarEncargo(encargo, inicio);
+        continue;
+      }
+      // Los planes de los proyectos van aparte de la cola de encargos: no esperan a que acabe el encargo en curso.
+      const proyecto = await tomarProyectoListo();
+      if (proyecto) {
+        await procesarProyecto(proyecto, inicio);
         continue;
       }
       const tarea = await tomarTareaLista();

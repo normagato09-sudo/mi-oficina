@@ -65,7 +65,7 @@ export async function procesarEncargo(encargo: Encargo, inicio: number): Promise
 }
 
 /** El equipo al que se puede repartir: agentes activos con despacho de trabajo (todos menos el Director). */
-async function cargarEquipo(directorId: string): Promise<(Agente & { despacho: Despacho })[]> {
+export async function cargarEquipo(directorId: string): Promise<(Agente & { despacho: Despacho })[]> {
   const { data, error } = await supabase()
     .from("agentes")
     .select("*")
