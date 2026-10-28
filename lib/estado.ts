@@ -28,6 +28,8 @@ export type ResumenPlanes = {
   preguntas: number;
   /** Texto corto si un plan ha fallado, o null. */
   error: string | null;
+  /** Planes que he aprobado y aún no he visto en su ficha (luz verde). */
+  aprobadosSinVer?: number;
 };
 
 /** Tareas de un agente según su paso. */
@@ -91,7 +93,7 @@ export function estadoAgente(
   if (estados.publicando > 0) return { ...base, luz: "amarillo", texto: "Publicando…" };
   if (tareas?.enRevision) return { ...base, luz: "amarillo", texto: "En revisión" };
   if (tareas?.pendientes) return { ...base, luz: "amarillo", texto: "Tarea pendiente" };
-  if (sinVer > 0) return { ...base, luz: "verde", texto: "¡Terminado!" };
+  if (sinVer > 0) return { ...base, luz: "verde", texto: planes?.aprobadosSinVer ? "Plan aprobado" : "¡Terminado!" };
   if (enCola > 0) return { ...base, luz: "apagada", texto: `${enCola} en cola` };
   return { ...base, luz: "apagada", texto: "Libre" };
 }

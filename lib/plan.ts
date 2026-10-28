@@ -101,6 +101,7 @@ const INSTRUCCIONES_PLAN = `Ahora tu trabajo es hacer el PLAN de un proyecto (no
 - Límite honesto: el equipo prepara todo (textos, carteles, código, calendarios, análisis…), pero NO publica, NO envía, NO despliega, NO paga, NO contacta con nadie y NO crea cuentas. "100 %" significa todo preparado y aprobado por la CEO. Si una tarea necesita algo que el equipo no puede hacer (publicar, enviar correos, subir la web, pagar, grabar, reunirse…), ponla como tarea para la CEO (agente_id "ceo") y explica en "motivo_ceo" por qué la tiene que hacer ella. En las demás tareas, "motivo_ceo" vacío.
 - Ids de las tareas: "T1", "T2"… seguidos en todo el plan. En "depende_de", los ids de las tareas anteriores cuyo resultado le hace falta (vacío si no depende de ninguna). Nunca una tarea posterior.
 - En "descripcion", qué tiene que hacer, en una o dos frases, con los datos exactos que te han dado (fechas, nombres, cifras). No inventes datos.
+- El Diseñador solo puede usar como foto una imagen adjunta al proyecto. Si no hay imágenes adjuntas, sus carteles van sin foto: nunca le pidas fotos que no existen.
 - Entre 4 y 20 tareas en total. Frases cortas.
 - Si falta información IMPORTANTE para planificar (no detalles que puedas decidir tú con sentido común), no hagas el plan: accion "preguntar", de 1 a 3 preguntas cortas y concretas, y fases vacías. Nunca preguntes por fotos, logos ni colores.
 - Si hay un plan anterior y cambios pedidos por la CEO, rehaz el plan aplicando esos cambios.
@@ -130,6 +131,7 @@ function mensajePlan(p: Proyecto, organizacion: string, equipo: (Agente & { desp
     `Hoy es ${fechaHoy()}.`,
     `Proyecto "${p.nombre}" de la organización "${organizacion}"${p.fecha_limite ? `, con fecha límite ${p.fecha_limite}` : ", sin fecha límite"}:\n${textoEncargo({ texto, adjuntos: p.adjuntos }, 0, MAX_PDF_PLAN)}`,
   ];
+  if (!p.adjuntos.some((a) => a.tipo === "imagen")) partes.push("Este proyecto no tiene imágenes adjuntas.");
   const respondidas = (p.preguntas ?? []).filter((q) => q.respuesta !== null);
   if (respondidas.length) partes.push(`Preguntas que ya me hiciste y mis respuestas:\n${respondidas.map((q) => `P: ${q.pregunta}\nR: ${q.respuesta}`).join("\n\n")}`);
   if (p.plan && p.cambios_pedidos) {

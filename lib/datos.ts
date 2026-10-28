@@ -218,6 +218,7 @@ const esDirector = (a: FilaAgente) => a.despacho === "direccion" && a.tipo === "
 function conEstados(equipo: FilaAgente[], actividad: Actividad): AgenteConEstado[] {
   return equipo.map((a) => {
     const suyas = actividad.publicaciones.filter((p) => p.agente_id === a.id);
+    const planesSinVer = esDirector(a) ? actividad.planesAprobados.filter((f) => !a.visto_en || Date.parse(f) > Date.parse(a.visto_en)).length : 0;
     return {
       ...a,
       estados: contarEstados(suyas),
@@ -226,9 +227,11 @@ function conEstados(equipo: FilaAgente[], actividad: Actividad): AgenteConEstado
           ? suyas.filter((p) => p.estado === "publicada" && Date.parse(p.actualizado_en) > Date.parse(a.visto_en!)).length
           : 0) +
         actividad.aprobadas.filter((t) => t.agente_id === a.id && (!a.visto_en || Date.parse(t.aprobada_en) > Date.parse(a.visto_en))).length +
-        (esDirector(a) ? actividad.planesAprobados.filter((f) => !a.visto_en || Date.parse(f) > Date.parse(a.visto_en)).length : 0),
+        planesSinVer,
       tareas: resumenTareas(actividad.tareas.filter((t) => t.agente_id === a.id)),
-      ...(esDirector(a) ? { reparto: actividad.reparto } : {}),
+      ...(esDirector(a)
+        ? { reparto: { ...actividad.reparto, planes: actividad.reparto.planes && { ...actividad.reparto.planes, aprobadosSinVer: planesSinVer } } }
+        : {}),
     };
   });
 }
