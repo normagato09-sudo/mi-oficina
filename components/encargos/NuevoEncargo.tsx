@@ -6,7 +6,7 @@ import { ACEPTA_ADJUNTOS, MAX_ADJUNTOS, MAX_BYTES_ADJUNTO, MAX_CARACTERES_ENCARG
 
 type Props = {
   agenteId: string;
-  /** Proyectos activos: el encargo es para uno de ellos. */
+  /** Organizaciones activas: el encargo es para una de ellas. */
   proyectos: { id: string; nombre: string }[];
   /** Abrir el formulario directamente (botón "+ Nuevo encargo" de la cabecera). */
   abiertoInicial?: boolean;
@@ -16,7 +16,7 @@ function tamano(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Botón "Nuevo encargo" y su formulario: proyecto, urgente, texto y adjuntos. Cada envío va al final de la cola. */
+/** Botón "Nuevo encargo" y su formulario: organización, urgente, texto y adjuntos. Cada envío va al final de la cola. */
 export default function NuevoEncargo({ agenteId, proyectos, abiertoInicial = false }: Props) {
   const [abierto, setAbierto] = useState(abiertoInicial);
   const [proyectoId, setProyectoId] = useState(proyectos.length === 1 ? proyectos[0]!.id : "");
@@ -58,7 +58,7 @@ export default function NuevoEncargo({ agenteId, proyectos, abiertoInicial = fal
     e.preventDefault();
     setError(null);
     if (!texto.trim() && !archivos.length) return setError("Escribe el encargo o adjunta algún archivo.");
-    if (!proyectoId) return setError("Elige para qué proyecto es el encargo.");
+    if (!proyectoId) return setError("Elige para qué organización es el encargo.");
 
     try {
       let subidas: { ruta: string; nombre: string; tipo: string }[] = [];
@@ -87,7 +87,7 @@ export default function NuevoEncargo({ agenteId, proyectos, abiertoInicial = fal
       const r = await enviarEncargo({ agenteId, proyectoId, texto, urgente, subidas });
       if (r.error) throw new Error(r.error);
 
-      // El formulario se queda abierto (con el mismo proyecto) para poder mandar otro seguido.
+      // El formulario se queda abierto (con la misma organización) para poder mandar otro seguido.
       setTexto("");
       setArchivos([]);
       setUrgente(false);
@@ -123,7 +123,7 @@ export default function NuevoEncargo({ agenteId, proyectos, abiertoInicial = fal
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex min-w-48 flex-1 flex-col gap-2">
           <label htmlFor={idProyecto} className="font-semibold">
-            Proyecto
+            Organización
           </label>
           <select
             id={idProyecto}
@@ -132,7 +132,7 @@ export default function NuevoEncargo({ agenteId, proyectos, abiertoInicial = fal
             disabled={ocupado}
             className="min-h-11 rounded-lg border border-line bg-ink px-3 text-sm text-text outline-none focus:border-accent"
           >
-            {proyectos.length !== 1 && <option value="">Elige un proyecto…</option>}
+            {proyectos.length !== 1 && <option value="">Elige una organización…</option>}
             {proyectos.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nombre}

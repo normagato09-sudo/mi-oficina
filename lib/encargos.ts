@@ -15,7 +15,7 @@ export type Adjunto = AdjuntoImagen | AdjuntoPdf;
 
 export type Encargo = {
   id: string;
-  /** Proyecto del encargo (tabla edificios). */
+  /** Organización del encargo (tabla edificios). */
   edificio_id: string;
   director_id: string;
   texto: string;
@@ -283,10 +283,10 @@ async function paraMostrar(encargos: FilaVista[]): Promise<EncargoVista[]> {
         : { tipo: "pdf" as const, nombre: a.nombre, paginas: a.paginas, caracteres: a.texto.length },
     ),
     proyecto: {
-      nombre: edificios?.nombre ?? "Proyecto",
+      nombre: edificios?.nombre ?? "Organización",
       color: edificios?.color ?? "#8a93ad",
       colorSecundario: edificios?.color_secundario || edificios?.color || "#8a93ad",
-      letrero: edificios?.letrero || edificios?.nombre || "Proyecto",
+      letrero: edificios?.letrero || edificios?.nombre || "Organización",
       letreroSecundario: edificios?.letrero_secundario || null,
     },
     tareas: [...(tareas ?? [])]

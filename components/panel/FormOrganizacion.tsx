@@ -1,16 +1,16 @@
 "use client";
 
 import { startTransition, useActionState, useId } from "react";
-import { guardarDatosProyecto, type EstadoProyecto } from "@/app/actions/proyecto";
+import { guardarDatosOrganizacion, type EstadoOrganizacion } from "@/app/actions/organizacion";
 import { IDIOMAS_PROYECTO } from "@/lib/idiomas";
 import type { Edificio } from "@/lib/tipos";
 
 const CAMPO =
   "w-full rounded-lg border border-line bg-ink px-3 py-2 text-sm text-text outline-none focus:border-accent";
 
-/** Formulario para crear un proyecto (sin `proyecto`) o editar sus datos. */
-export default function FormProyecto({ proyecto }: { proyecto?: Edificio }) {
-  const [estado, accion, guardando] = useActionState<EstadoProyecto, FormData>(guardarDatosProyecto, {});
+/** Formulario para crear una organización (sin `organizacion`) o editar sus datos. */
+export default function FormOrganizacion({ organizacion: proyecto }: { organizacion?: Edificio }) {
+  const [estado, accion, guardando] = useActionState<EstadoOrganizacion, FormData>(guardarDatosOrganizacion, {});
   const id = useId();
 
   return (
@@ -76,9 +76,9 @@ export default function FormProyecto({ proyecto }: { proyecto?: Edificio }) {
 
       <div className="flex flex-col gap-1">
         <label htmlFor={`${id}-ficha`} className="font-semibold">
-          Ficha del proyecto
+          Ficha de la organización
         </label>
-        <p className="text-sm text-muted">Qué es, tono, reglas y lo que hay que poner siempre. Los agentes la leen en cada encargo.</p>
+        <p className="text-sm text-muted">Qué es, tono, reglas y lo que hay que poner siempre. Los agentes la leen en cada encargo y proyecto.</p>
         <textarea
           id={`${id}-ficha`}
           name="ficha"
@@ -90,7 +90,7 @@ export default function FormProyecto({ proyecto }: { proyecto?: Edificio }) {
 
       <div className="flex items-center gap-3">
         <button type="submit" className="btn-primary" disabled={guardando}>
-          {guardando ? "Guardando…" : proyecto ? "Guardar cambios" : "Crear proyecto"}
+          {guardando ? "Guardando…" : proyecto ? "Guardar cambios" : "Crear organización"}
         </button>
         <p role="status" aria-live="polite" className="text-sm">
           {estado.error ? <span className="text-red-400">{estado.error}</span> : estado.ok ? <span className="text-muted">{estado.ok}</span> : null}

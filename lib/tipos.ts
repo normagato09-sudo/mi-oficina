@@ -1,6 +1,6 @@
 export type EstadoPublicacion = "preparando" | "lista" | "publicando" | "publicada" | "error";
 
-/** Un proyecto (cliente de la oficina). La tabla sigue llamándose "edificios". */
+/** Una organización (cliente de la oficina: CIFA, Defensem…). La tabla sigue llamándose "edificios". */
 export type Edificio = {
   id: string;
   nombre: string;

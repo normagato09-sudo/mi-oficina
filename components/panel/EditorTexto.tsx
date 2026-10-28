@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useId, useState } from "react";
-import { guardarTexto, type EstadoGuardado } from "@/app/actions/proyecto";
+import { guardarTexto, type EstadoGuardado } from "@/app/actions/organizacion";
 
 type Props = {
   tipo: "ficha" | "perfil";
@@ -12,7 +12,7 @@ type Props = {
   filas?: number;
 };
 
-/** Un texto editable (ficha del proyecto o perfil de un agente) con su botón Guardar. */
+/** Un texto editable (ficha de la organización o perfil de un agente) con su botón Guardar. */
 export default function EditorTexto({ tipo, id, etiqueta, ayuda, inicial, filas = 8 }: Props) {
   const [estado, accion, guardando] = useActionState<EstadoGuardado, FormData>(guardarTexto, {});
   const [texto, setTexto] = useState(inicial);

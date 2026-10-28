@@ -6,11 +6,11 @@ import VistaOficina from "@/components/juego/VistaOficina";
 import Oficina, { estiloAgente, letreroDe } from "@/components/oficina/Oficina";
 import PanelFicha from "@/components/ficha/PanelFicha";
 import { SinFicha } from "@/components/ficha/navegacion";
-import PanelProyecto from "@/components/panel/PanelProyecto";
-import PanelProyectos from "@/components/panel/PanelProyectos";
+import PanelEquipo from "@/components/panel/PanelEquipo";
+import PanelOrganizaciones from "@/components/panel/PanelOrganizaciones";
 import { avanzarCola } from "@/lib/cola";
 import { cargarAprendizajesEquipo } from "@/lib/aprendizajes";
-import { cargarOficina, cargarTodosLosProyectos, type DatosOficina } from "@/lib/datos";
+import { cargarOficina, cargarTodasLasOrganizaciones, type DatosOficina } from "@/lib/datos";
 import { estadoAgente, plural } from "@/lib/estado";
 import { plantaDe } from "@/lib/plantas";
 import type { Edificio } from "@/lib/tipos";
@@ -28,16 +28,16 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   const panel = hayFicha ? undefined : params.panel;
 
   let datos: DatosOficina;
-  let todosLosProyectos: Edificio[] | undefined;
+  let todasLasOrganizaciones: Edificio[] | undefined;
   let aprendizajes: Awaited<ReturnType<typeof cargarAprendizajesEquipo>> = {};
-  let errorProyectos: string | null = null;
+  let errorOrganizaciones: string | null = null;
   try {
-    // Todo a la vez: la oficina y, si están abiertos, el panel "Proyectos" o la carpeta "Equipo".
-    [datos, todosLosProyectos, aprendizajes] = await Promise.all([
+    // Todo a la vez: la oficina y, si están abiertos, el panel "Organizaciones" o la carpeta "Equipo".
+    [datos, todasLasOrganizaciones, aprendizajes] = await Promise.all([
       cargarOficina(),
-      panel === "proyectos"
-        ? cargarTodosLosProyectos().catch((e: unknown) => {
-            errorProyectos = e instanceof Error ? e.message : String(e);
+      panel === "organizaciones"
+        ? cargarTodasLasOrganizaciones().catch((e: unknown) => {
+            errorOrganizaciones = e instanceof Error ? e.message : String(e);
             return undefined;
           })
         : undefined,
@@ -61,16 +61,16 @@ export default async function Home({ searchParams }: PageProps<"/">) {
   after(avanzarCola);
 
   const director = datos.agentes.find((a) => a.despacho === "direccion" && a.tipo === "direccion");
-  // El cartel de Dirección: el proyecto del encargo en curso o, si no hay ninguno, "MI OFICINA".
-  const proyectoCartel = datos.proyectos.find((p) => p.id === datos.proyectoEnCurso);
-  const corbata = proyectoCartel ? letreroDe(proyectoCartel).colorSecundario : "#F5B841";
+  // El cartel de Dirección: la organización del encargo en curso o, si no hay ninguno, "MI OFICINA".
+  const organizacionCartel = datos.organizaciones.find((p) => p.id === datos.organizacionEnCurso);
+  const corbata = organizacionCartel ? letreroDe(organizacionCartel).colorSecundario : "#F5B841";
   const equipoAbierto = panel === "equipo";
 
   return (
     <>
       {/* Mientras el Director trabaja (o hay cola que puede empezar), se mira si algo cambia. */}
       <AutoRefresco activo={datos.hayEnCurso} firma={datos.firma} />
-      <Header directorId={director?.id} avisos={datos.avisos} proyectosAbierto={panel === "proyectos"} />
+      <Header directorId={director?.id} avisos={datos.avisos} panel={panel === "organizaciones" ? "organizaciones" : undefined} />
       <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-6 py-4">
         <main className="min-w-0 flex-1">
           <VistaOficina
@@ -80,11 +80,11 @@ export default async function Home({ searchParams }: PageProps<"/">) {
                 <h1 className="font-display text-xl font-extrabold tracking-tight">Mi Oficina</h1>
                 <p className="text-sm text-muted">
                   {plural(datos.agentes.length, "agente", "agentes")} · trabajando para{" "}
-                  {datos.proyectos.length === 1 ? datos.proyectos[0]!.nombre : plural(datos.proyectos.length, "proyecto", "proyectos")}
+                  {datos.organizaciones.length === 1 ? datos.organizaciones[0]!.nombre : plural(datos.organizaciones.length, "organización", "organizaciones")}
                 </p>
               </div>
             }
-            clasica={<Oficina datos={datos} enCola={datos.enCola} proyectoCartel={proyectoCartel} equipoAbierto={equipoAbierto} />}
+            clasica={<Oficina datos={datos} enCola={datos.enCola} organizacionCartel={organizacionCartel} equipoAbierto={equipoAbierto} />}
             agentes={datos.agentes.map((a) => {
               const estado = estadoAgente(a, a.despacho === "direccion" ? datos.enCola : 0);
               return {
@@ -104,24 +104,24 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </main>
 
         <SinFicha>
-          {todosLosProyectos && (
-            <PanelProyectos
-              proyectos={todosLosProyectos}
-              seleccionado={typeof params.proyecto === "string" ? params.proyecto : undefined}
+          {todasLasOrganizaciones && (
+            <PanelOrganizaciones
+              organizaciones={todasLasOrganizaciones}
+              seleccionado={typeof params.organizacion === "string" ? params.organizacion : undefined}
             />
           )}
-          {errorProyectos && (
+          {errorOrganizaciones && (
             <p role="alert" className="w-[460px] shrink-0 rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm">
-              {errorProyectos}
+              {errorOrganizaciones}
             </p>
           )}
-          {equipoAbierto && <PanelProyecto agentes={datos.agentes} aprendizajes={aprendizajes} />}
+          {equipoAbierto && <PanelEquipo agentes={datos.agentes} aprendizajes={aprendizajes} />}
         </SinFicha>
 
         <PanelFicha
           agentes={datos.agentes}
           colores={Object.fromEntries(datos.agentes.map((a) => [a.id, estiloAgente(a, corbata).aspecto.camiseta]))}
-          proyectos={datos.proyectos.map((p) => {
+          proyectos={datos.organizaciones.map((p) => {
             const l = letreroDe(p);
             return { id: p.id, nombre: l.principal, secundario: l.secundario, color: l.color, colorSecundario: l.colorSecundario };
           })}

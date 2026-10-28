@@ -45,7 +45,7 @@ export function conAprendizajes(sistema: string, aprendizajes: Aprendizaje[]): s
   return `${sistema}\n\nLo que has aprendido de las correcciones de la CEO (síguelo siempre):\n${aprendizajes.map((a) => `- ${a.texto}`).join("\n")}`;
 }
 
-/** Todos los aprendizajes, por agente y con el nombre del proyecto (carpeta "Equipo"). */
+/** Todos los aprendizajes, por agente y con el nombre de la organización (carpeta "Equipo"). */
 export async function cargarAprendizajesEquipo(): Promise<Record<string, (Aprendizaje & { proyecto: string | null })[]>> {
   const { data, error } = await supabase()
     .from("aprendizajes")
@@ -67,7 +67,7 @@ const INSTRUCCIONES_APRENDER = `Ahora ayudas a que un agente del equipo aprenda 
 Compara lo que entregó el agente con lo que ha cambiado o pedido la CEO y escribe 1 o 2 aprendizajes:
 - Cortos (una frase) y concretos, en forma de regla que el agente pueda seguir la próxima vez. Ejemplo: "En CIFA, no poner 'inscríbete ahora' si el encargo no habla de inscripciones."
 - Solo lo que se pueda generalizar a otros encargos; no repitas datos sueltos de este encargo (fechas, horas…).
-- "alcance": "proyecto" si solo vale para este proyecto (tono, estilo, expresiones del proyecto…) o "todos" si vale para cualquier proyecto.
+- "alcance": "organizacion" si solo vale para esta organización (tono, estilo, expresiones de la organización…) o "todos" si vale para cualquier organización.
 - No repitas aprendizajes que el agente ya tiene. Si no hay nada que aprender, devuelve la lista vacía.
 Escribe en español.`;
 
@@ -82,7 +82,7 @@ const ESQUEMA_APRENDER = {
         type: "object",
         additionalProperties: false,
         required: ["texto", "alcance"],
-        properties: { texto: { type: "string" }, alcance: { type: "string", enum: ["proyecto", "todos"] } },
+        properties: { texto: { type: "string" }, alcance: { type: "string", enum: ["organizacion", "todos"] } },
       },
     },
   },
@@ -105,7 +105,7 @@ export async function aprenderDe(datos: {
 }): Promise<Aprendizaje[]> {
   const [contexto, existentes] = await Promise.all([contextoAgente(datos.directorId, datos.proyectoId), aprendizajesPara(datos.agente.id, datos.proyectoId)]);
   const mensaje = [
-    `Agente: ${datos.agente.nombre}. Proyecto: "${contexto.proyecto.nombre}".`,
+    `Agente: ${datos.agente.nombre}. Organización: "${contexto.organizacion.nombre}".`,
     `Encargo:\n${datos.encargo.slice(0, 1_500)}`,
     `Lo que entregó ${datos.agente.nombre}:\n${datos.versionAgente.slice(0, MAX_CARACTERES_VERSION)}`,
     datos.origen === "edicion"
@@ -116,7 +116,7 @@ export async function aprenderDe(datos: {
     .filter(Boolean)
     .join("\n\n");
 
-  const r = await generarEstructurado<{ aprendizajes: { texto: string; alcance: "proyecto" | "todos" }[] }>({
+  const r = await generarEstructurado<{ aprendizajes: { texto: string; alcance: "organizacion" | "todos" }[] }>({
     sistema: `${sistemaDeAgente(contexto)}\n\n${INSTRUCCIONES_APRENDER}`,
     mensaje,
     nombre: "aprendizajes",
@@ -124,7 +124,7 @@ export async function aprenderDe(datos: {
     maxTokens: 1_200,
   });
   const nuevos = (Array.isArray(r.aprendizajes) ? r.aprendizajes : [])
-    .map((a) => ({ texto: String(a?.texto ?? "").trim(), alcance: a?.alcance === "todos" ? "todos" : "proyecto" }))
+    .map((a) => ({ texto: String(a?.texto ?? "").trim(), alcance: a?.alcance === "todos" ? "todos" : "organizacion" }))
     .filter((a) => a.texto && !existentes.some((e) => e.texto.toLowerCase() === a.texto.toLowerCase()))
     .slice(0, MAX_POR_VEZ);
   if (!nuevos.length) return [];

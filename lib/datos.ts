@@ -18,16 +18,16 @@ export type AgenteConEstado = Agente & {
 };
 
 export type DatosOficina = {
-  /** Proyectos activos (los clientes de la oficina), en su orden. */
-  proyectos: Edificio[];
+  /** Organizaciones activas (los clientes de la oficina; tabla edificios), en su orden. */
+  organizaciones: Edificio[];
   /** El equipo: agentes activos con despacho. */
   agentes: AgenteConEstado[];
   /** Avisos sin leer (campana). */
   avisos: Aviso[];
   /** Encargos esperando en la cola del Director. */
   enCola: number;
-  /** Proyecto del encargo en curso: su cartel cuelga en Dirección. */
-  proyectoEnCurso: string | null;
+  /** Organización del encargo en curso: su cartel cuelga en Dirección. */
+  organizacionEnCurso: string | null;
   /** El Director trabaja (o hay cola que puede empezar): la página sigue mirando si algo cambia. */
   hayEnCurso: boolean;
   /** Huella de lo que se ve (ver cargarEstadoOficina). */
@@ -48,19 +48,19 @@ function contarEstados(filas: { estado: EstadoPublicacion }[]): Record<EstadoPub
   return estados;
 }
 
-/** Todos los proyectos (también los archivados), en su orden. */
-export async function cargarTodosLosProyectos(): Promise<Edificio[]> {
+/** Todas las organizaciones (también las archivadas), en su orden. */
+export async function cargarTodasLasOrganizaciones(): Promise<Edificio[]> {
   const { data, error } = await supabase().from("edificios").select("*").order("creado_en").returns<Edificio[]>();
-  if (error) throw new Error(`No se pudieron leer los proyectos: ${error.message}`);
+  if (error) throw new Error(`No se pudieron leer las organizaciones: ${error.message}`);
   return (data ?? []).sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
 }
 
-/** Proyectos activos, en su orden. */
-export async function cargarProyectos(): Promise<Edificio[]> {
-  return (await cargarTodosLosProyectos()).filter((p) => p.activo !== false);
+/** Organizaciones activas, en su orden. */
+export async function cargarOrganizaciones(): Promise<Edificio[]> {
+  return (await cargarTodasLasOrganizaciones()).filter((p) => p.activo !== false);
 }
 
-export type DatosProyecto = {
+export type DatosOrganizacion = {
   nombre: string;
   color: string;
   idioma: IdiomaProyecto;
@@ -69,34 +69,34 @@ export type DatosProyecto = {
   instagram: string | null;
 };
 
-/** Crea un proyecto (activo, al final) o guarda los cambios de uno existente. Devuelve su id. */
-export async function guardarProyecto(id: string | null, datos: DatosProyecto): Promise<string> {
+/** Crea una organización (activa, al final) o guarda los cambios de una existente. Devuelve su id. */
+export async function guardarOrganizacion(id: string | null, datos: DatosOrganizacion): Promise<string> {
   const db = supabase();
   if (!id) {
-    const proyectos = await cargarTodosLosProyectos();
-    const orden = Math.max(0, ...proyectos.map((p) => p.orden ?? 0)) + 1;
+    const organizaciones = await cargarTodasLasOrganizaciones();
+    const orden = Math.max(0, ...organizaciones.map((p) => p.orden ?? 0)) + 1;
     const { data, error } = await db
       .from("edificios")
       .insert({ ...datos, activo: true, orden })
       .select("id")
       .single<{ id: string }>();
-    if (error) throw new Error(`No se pudo crear el proyecto: ${error.message}`);
+    if (error) throw new Error(`No se pudo crear la organización: ${error.message}`);
     return data.id;
   }
 
   const { data: antes, error: e1 } = await db.from("edificios").select("nombre").eq("id", id).single<{ nombre: string }>();
-  if (e1) throw new Error(`No se encontró el proyecto: ${e1.message}`);
+  if (e1) throw new Error(`No se encontró la organización: ${e1.message}`);
   // Si cambia el nombre, el cartel pasa a mostrar el nombre nuevo.
   const letrero = antes.nombre !== datos.nombre ? { letrero: null, letrero_secundario: null } : {};
   const { error } = await db.from("edificios").update({ ...datos, ...letrero }).eq("id", id);
-  if (error) throw new Error(`No se pudo guardar el proyecto: ${error.message}`);
+  if (error) throw new Error(`No se pudo guardar la organización: ${error.message}`);
   return id;
 }
 
-/** Archiva (activo = false) o vuelve a activar un proyecto. Nunca se borra. */
-export async function activarProyecto(id: string, activo: boolean): Promise<void> {
+/** Archiva (activo = false) o vuelve a activar una organización. Nunca se borra. */
+export async function activarOrganizacion(id: string, activo: boolean): Promise<void> {
   const { error } = await supabase().from("edificios").update({ activo }).eq("id", id);
-  if (error) throw new Error(`No se pudo ${activo ? "activar" : "archivar"} el proyecto: ${error.message}`);
+  if (error) throw new Error(`No se pudo ${activo ? "activar" : "archivar"} la organización: ${error.message}`);
 }
 
 type FilaAgente = Agente & { despacho: Despacho };
@@ -169,8 +169,8 @@ async function consultarActividad() {
     reparto,
     enCola,
     avisosSinLeer: avisos.count ?? 0,
-    /** Proyecto del encargo en curso (su cartel cuelga en Dirección), o null. */
-    proyectoEnCurso: filas.find((e) => e.estado === "en_curso")?.edificio_id ?? null,
+    /** Organización del encargo en curso (su cartel cuelga en Dirección), o null. */
+    organizacionEnCurso: filas.find((e) => e.estado === "en_curso")?.edificio_id ?? null,
     /** Hay que seguir mirando: el Director o el equipo trabajan, o hay cola que puede empezar. */
     activo:
       reparto.enCurso ||
@@ -221,26 +221,26 @@ function firmaDe(agentes: AgenteConEstado[], actividad: Actividad): string {
     }),
     actividad.enCola,
     actividad.avisosSinLeer,
-    actividad.proyectoEnCurso,
+    actividad.organizacionEnCurso,
     actividad.ultimoCambio,
   ]);
 }
 
-/** La oficina: proyectos activos, el equipo con sus estados, la cola, los avisos y la huella. Una sola ronda de consultas. */
+/** La oficina: organizaciones activas, el equipo con sus estados, la cola, los avisos y la huella. Una sola ronda de consultas. */
 export async function cargarOficina(): Promise<DatosOficina> {
-  const [proyectos, equipo, actividad, avisos] = await Promise.all([
-    cargarProyectos(),
+  const [organizaciones, equipo, actividad, avisos] = await Promise.all([
+    cargarOrganizaciones(),
     consultarEquipo("*"),
     consultarActividad(),
     cargarAvisos().catch((): Aviso[] => []),
   ]);
   const agentes = conEstados(equipo, actividad);
   return {
-    proyectos,
+    organizaciones,
     agentes,
     avisos,
     enCola: actividad.enCola,
-    proyectoEnCurso: actividad.proyectoEnCurso,
+    organizacionEnCurso: actividad.organizacionEnCurso,
     hayEnCurso: actividad.activo,
     firma: firmaDe(agentes, actividad),
   };
@@ -275,36 +275,36 @@ export async function marcarAvisosLeidos(): Promise<void> {
 
 /**
  * Lo que un agente necesita para trabajar en un encargo: sus instrucciones y la ficha
- * del proyecto de ESE encargo (los agentes son de la oficina, no de un proyecto).
+ * de la organización de ESE encargo (los agentes son de la oficina, no de una organización).
  */
-export async function contextoAgente(agenteId: string, proyectoId: string): Promise<{
+export async function contextoAgente(agenteId: string, organizacionId: string): Promise<{
   agente: Agente;
-  proyecto: { nombre: string; idioma: string; ficha: string };
+  organizacion: { nombre: string; idioma: string; ficha: string };
 }> {
   const db = supabase();
   const [{ data: agente, error: e1 }, { data: edificio, error: e2 }] = await Promise.all([
     db.from("agentes").select("*").eq("id", agenteId).single<Agente>(),
-    db.from("edificios").select("*").eq("id", proyectoId).single<Edificio>(),
+    db.from("edificios").select("*").eq("id", organizacionId).single<Edificio>(),
   ]);
   if (e1) throw new Error(`No se pudo leer el agente: ${e1.message}`);
-  if (e2) throw new Error(`No se pudo leer el proyecto: ${e2.message}`);
+  if (e2) throw new Error(`No se pudo leer la organización: ${e2.message}`);
   return {
     agente,
-    proyecto: { nombre: edificio.nombre, idioma: edificio.idioma ?? "es", ficha: edificio.ficha ?? "" },
+    organizacion: { nombre: edificio.nombre, idioma: edificio.idioma ?? "es", ficha: edificio.ficha ?? "" },
   };
 }
 
 const IDIOMAS: Record<string, string> = { es: "español", ca: "catalán", en: "inglés" };
 
-/** Instrucciones de sistema de un agente: su perfil, la ficha del proyecto del encargo y el idioma. */
-export function sistemaDeAgente({ agente, proyecto }: Awaited<ReturnType<typeof contextoAgente>>): string {
+/** Instrucciones de sistema de un agente: su perfil, la ficha de la organización del encargo y el idioma. */
+export function sistemaDeAgente({ agente, organizacion: proyecto }: Awaited<ReturnType<typeof contextoAgente>>): string {
   const idioma = IDIOMAS[proyecto.idioma] ?? proyecto.idioma;
   return [
     agente.instrucciones.trim(),
     agente.tipo === "traduccion"
-      ? `Este encargo es del proyecto "${proyecto.nombre}", que suele escribir en ${idioma}. Traduce al idioma que te pidan.`
-      : `Este encargo es del proyecto "${proyecto.nombre}". Escribe siempre en ${idioma}.`,
-    proyecto.ficha.trim() && `Ficha del proyecto (síguela siempre):\n${proyecto.ficha.trim()}`,
+      ? `Este encargo es de la organización "${proyecto.nombre}", que suele escribir en ${idioma}. Traduce al idioma que te pidan.`
+      : `Este encargo es de la organización "${proyecto.nombre}". Escribe siempre en ${idioma}.`,
+    proyecto.ficha.trim() && `Ficha de la organización (síguela siempre):\n${proyecto.ficha.trim()}`,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -328,7 +328,7 @@ export async function trabajarComoAgente<T>(agenteId: string, trabajo: () => Pro
   }
 }
 
-/** Guarda la ficha de un proyecto. */
+/** Guarda la ficha de una organización. */
 export async function guardarFicha(edificioId: string, ficha: string): Promise<void> {
   const { error } = await supabase().from("edificios").update({ ficha }).eq("id", edificioId);
   if (error) throw new Error(`No se pudo guardar la ficha: ${error.message}`);

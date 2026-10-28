@@ -22,7 +22,7 @@ export const ENTREGAS: Record<DespachoTrabajo, string> = {
   ciberseguridad: "Una lista de problemas de seguridad, cada uno con su riesgo (alto, medio o bajo), una explicación sencilla y los pasos para arreglarlo.",
   secretaria: "La ficha de un alumno (nombre, Discord, país, correo, cumpleaños, cursos) y la lista de datos que faltan.",
   informes:
-    "Un informe por proyecto con lo hecho, lo pendiente, lo que espera a la CEO y 3 prioridades. Recibe los datos reales de los encargos y las tareas de los últimos 7 días.",
+    "Un informe por organización con lo hecho, lo pendiente, lo que espera a la CEO y 3 prioridades. Recibe los datos reales de los encargos y las tareas de los últimos 7 días.",
   planificacion: "Un calendario de publicaciones en tabla: fecha, red social, formato, tema, objetivo y quién del equipo lo hace. Solo usa los eventos y fechas que le dan.",
   comunidad: "Una respuesta por cada mensaje, comentario o duda (de redes, Discord o correo), lista para copiar, con los datos que falten señalados. No envía nada.",
   revision: "Una lista de problemas o mejoras del código, cada uno con prioridad (alta, media o baja), explicación sencilla y cómo arreglarlo, y el código corregido listo para copiar.",
@@ -210,7 +210,7 @@ const ESQUEMAS_DATOS: Record<DespachoTrabajo, object> = {
     prioridades: lista(texto(), "Exactamente 3 prioridades."),
   }),
   planificacion: objeto({
-    titulo: texto("Proyecto y periodo del calendario."),
+    titulo: texto("Organización y periodo del calendario."),
     publicaciones: lista(
       objeto({
         fecha: texto("Fecha (y hora si la hay)."),

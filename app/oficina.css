@@ -280,7 +280,7 @@
 
 /* ───────────── Despacho de Dirección ───────────── */
 
-/* Estantería con una carpeta por proyecto (abre su ficha) y la del equipo */
+/* Estantería con una carpeta por organización (abre su ficha) y la del equipo */
 .estanteria-carpetas {
   position: absolute;
   z-index: 7;

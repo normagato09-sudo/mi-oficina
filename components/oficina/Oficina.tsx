@@ -63,7 +63,7 @@ type Props = {
   /** Encargos en la cola del Director. */
   enCola: number;
   /** Proyecto del encargo en curso: su cartel cuelga en Dirección (sin él, "MI OFICINA"). */
-  proyectoCartel?: Edificio;
+  organizacionCartel?: Edificio;
   /** La carpeta "Equipo" de la estantería está abierta. */
   equipoAbierto?: boolean;
 };
@@ -306,7 +306,7 @@ function decoracion(despacho: Despacho, props: Props): ReactNode {
         <>
           <EstanteriaEquipo abierta={props.equipoAbierto === true} />
           <Ventana x={196} y={14} ancho={112} alto={96} />
-          <CuadroNombre x={320} y={20} {...(props.proyectoCartel ? letreroDe(props.proyectoCartel) : CARTEL_OFICINA)} />
+          <CuadroNombre x={320} y={20} {...(props.organizacionCartel ? letreroDe(props.organizacionCartel) : CARTEL_OFICINA)} />
           <LamparaColgante x={252} cable={10} />
           <AlfombraPlanta x={63} y={222} ancho={320} alto={124} tipo="persa" />
           <Planta x={378} y={150} tipo="ficus" />
@@ -392,7 +392,7 @@ function decoracion(despacho: Despacho, props: Props): ReactNode {
 /** La oficina vista desde arriba: nueve despachos, el pasillo y un rincón de descanso. */
 export default function Oficina(props: Props) {
   const { datos, enCola } = props;
-  const corbata = props.proyectoCartel ? letreroDe(props.proyectoCartel).colorSecundario : "#F5B841";
+  const corbata = props.organizacionCartel ? letreroDe(props.organizacionCartel).colorSecundario : "#F5B841";
   // Los jefes de planta solo están en el juego.
   const despachos = Object.keys(SALAS) as (keyof typeof SALAS)[];
 

@@ -179,6 +179,6 @@ export async function aprobarTarea(id: string): Promise<void> {
   const lista = quienes.length > 1 ? `${quienes.slice(0, -1).join(", ")} y ${quienes.at(-1)}` : quienes[0];
   await db.from("avisos").insert({
     encargo_id: encargo.id,
-    mensaje: `El Director: terminado (${encargo.edificios?.nombre ?? "proyecto"}) · ${texto.length > 60 ? `${texto.slice(0, 60)}…` : texto || "encargo con adjuntos"} — aprobaste el trabajo de ${lista}.`,
+    mensaje: `El Director: terminado (${encargo.edificios?.nombre ?? "organización"}) · ${texto.length > 60 ? `${texto.slice(0, 60)}…` : texto || "encargo con adjuntos"} — aprobaste el trabajo de ${lista}.`,
   });
 }

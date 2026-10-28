@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { refresh } from "next/cache";
 import { after } from "next/server";
-import { cargarProyectos, marcarAvisosLeidos } from "@/lib/datos";
+import { cargarOrganizaciones, marcarAvisosLeidos } from "@/lib/datos";
 import {
   cancelarEncargo,
   cargarDirector,
@@ -58,8 +58,8 @@ export async function enviarEncargo(datos: {
   if (!director) return { error: "Solo el Director recibe encargos." };
 
   try {
-    const proyectos = await cargarProyectos();
-    if (!proyectos.some((p) => p.id === datos.proyectoId)) return { error: "Elige un proyecto activo." };
+    const proyectos = await cargarOrganizaciones();
+    if (!proyectos.some((p) => p.id === datos.proyectoId)) return { error: "Elige una organización activa." };
     await crearEncargo({
       director,
       proyectoId: datos.proyectoId,

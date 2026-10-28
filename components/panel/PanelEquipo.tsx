@@ -12,7 +12,7 @@ type Props = {
 };
 
 /** Panel de la carpeta "Equipo" de la estantería del Director: el perfil de cada agente y lo que ha aprendido. */
-export default function PanelProyecto({ agentes, aprendizajes }: Props) {
+export default function PanelEquipo({ agentes, aprendizajes }: Props) {
   return (
     <aside
       aria-labelledby="panel-titulo"
@@ -36,7 +36,7 @@ export default function PanelProyecto({ agentes, aprendizajes }: Props) {
             Equipo
           </h2>
           <p className="mt-1 text-sm text-muted">
-            El perfil de cada agente. Son los mismos para todos los proyectos: en cada encargo leen además la ficha de su proyecto.
+            El perfil de cada agente. Son los mismos para todas las organizaciones: en cada encargo leen además la ficha de su organización.
           </p>
         </div>
         <section aria-label="Perfiles de los agentes" className="flex flex-col gap-6">
@@ -61,7 +61,7 @@ export default function PanelProyecto({ agentes, aprendizajes }: Props) {
                         <li key={a.id} className="flex items-start gap-2 text-sm">
                           <span className="min-w-0 flex-1 pt-1.5 leading-snug">
                             {a.texto}{" "}
-                            <span className="text-xs text-muted">· {a.proyecto ?? "todos los proyectos"}</span>
+                            <span className="text-xs text-muted">· {a.proyecto ?? "todas las organizaciones"}</span>
                           </span>
                           <BorrarAprendizaje id={a.id} texto={a.texto} />
                         </li>

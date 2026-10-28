@@ -141,9 +141,9 @@ const INDICACIONES: Partial<Record<DespachoTrabajo, string>> = {
   redes: "En \"imagenes\" elige solo imágenes adjuntas, por su número (0 = la primera), en el orden en que van; si no hay imágenes, déjala vacía.",
   diseno:
     "Usa la plantilla \"foto\" solo si hay una imagen adjunta (y pon su número en \"foto\"); si no, pon -1. Rellena solo los textos de la plantilla que elijas y deja los demás vacíos. Textos cortos: el título, pocas palabras.",
-  informes: "Usa solo los datos reales de la oficina que te paso; si no hay datos de un proyecto, dilo. Termina con exactamente 3 prioridades.",
+  informes: "Usa solo los datos reales de la oficina que te paso; si no hay datos de una organización, dilo. Termina con exactamente 3 prioridades.",
   secretaria: "Si falta un dato imprescindible, déjalo vacío en la ficha y añádelo a \"faltan\"; nunca lo inventes.",
-  planificacion: "Usa solo los eventos y fechas del encargo y de la ficha del proyecto; si no bastan, propón temas sin inventar eventos y dilo en tu nota.",
+  planificacion: "Usa solo los eventos y fechas del encargo y de la ficha de la organización; si no bastan, propón temas sin inventar eventos y dilo en tu nota.",
   comunidad: "Una respuesta por cada mensaje que te pasen. Si falta un dato para responder, ponlo en \"faltan\" y no lo inventes.",
   agenda: "Si no te dan la fecha, la duración, los participantes o su zona horaria, no lo supongas: déjalo vacío y añádelo a \"faltan\".",
   rrhh: "Elige en \"clase\" qué entregas. Si no es una candidatura, deja vacías las listas de candidatura y \"encaja\". Nunca juzgues por edad, origen, género ni nada que no tenga que ver con el puesto.",
@@ -155,7 +155,7 @@ function instruccionesTrabajo(despacho: DespachoTrabajo): string {
     "Ahora haz la tarea que te ha encargado el Director.",
     `Lo que entregas: ${ENTREGAS[despacho]}`,
     INDICACIONES[despacho],
-    "Usa solo los datos del encargo, de los adjuntos, de las instrucciones del Director y de la ficha del proyecto: nunca inventes fechas, horas, lugares, nombres, cifras ni enlaces. Si te falta un dato, dilo en tu nota en vez de inventarlo.",
+    "Usa solo los datos del encargo, de los adjuntos, de las instrucciones del Director y de la ficha de la organización: nunca inventes fechas, horas, lugares, nombres, cifras ni enlaces. Si te falta un dato, dilo en tu nota en vez de inventarlo.",
     "En \"nota\", explica en una o dos frases qué has hecho y por qué.",
   ]
     .filter(Boolean)
@@ -180,7 +180,7 @@ async function datosUltimaSemana(): Promise<string> {
   if (!data?.length) return "No hay encargos en los últimos 7 días.";
   const porProyecto = new Map<string, string[]>();
   for (const e of data) {
-    const proyecto = e.edificios?.nombre ?? "Sin proyecto";
+    const proyecto = e.edificios?.nombre ?? "Sin organización";
     const tareas = (e.tareas ?? []).map((t) => `${t.agentes?.nombre ?? "?"}: ${t.estado}`).join(", ");
     const linea = `- [${e.estado}] ${e.creado_en.slice(0, 10)} · ${e.texto.replace(/\s+/g, " ").slice(0, 160)}${tareas ? ` (tareas: ${tareas})` : ""}`;
     porProyecto.set(proyecto, [...(porProyecto.get(proyecto) ?? []), linea]);
@@ -243,7 +243,7 @@ async function trabajar({ tarea, agente, encargo }: Contexto): Promise<() => Pro
 const INSTRUCCIONES_REVISION = `Ahora REVISAS el trabajo que ha entregado un agente del equipo. Compruébalo con cuidado:
 1. Que cumpla tus instrucciones y entregue lo que se le pidió.
 2. Que no haya NINGÚN dato inventado (fecha, hora, lugar, nombre, cifra, enlace) que no esté en el encargo, en los adjuntos, en tus instrucciones o en la ficha del proyecto.
-3. Que el tono y el idioma sean los del proyecto (o los que pediste).
+3. Que el tono y el idioma sean los de la organización (o los que pediste).
 4. Si hay otras entregas del mismo encargo, que digan lo mismo (mismas fechas, horas y lugar).
 Si está bien, "correcto": true y "comentarios" vacío. Si algo falla, "correcto": false y en "comentarios" di exactamente qué tiene que cambiar, de forma concreta (no repitas lo que está bien).
 En "nota_para_ceo" pon solo algo que la CEO deba saber (por ejemplo, un dato que falta y que habrá que añadir); si no hay nada, déjalo vacío.
@@ -270,7 +270,7 @@ async function revisar({ tarea, agente, encargo, otras }: Contexto): Promise<() 
     aprendizajesPara(agente.id, encargo.edificio_id),
   ]);
   const partes = [
-    `Encargo original de la CEO (proyecto "${contexto.proyecto.nombre}"):\n${textoEncargo(encargo, 0, 2_000)}`,
+    `Encargo original de la CEO (organización "${contexto.organizacion.nombre}"):\n${textoEncargo(encargo, 0, 2_000)}`,
     `Instrucciones que le diste a ${agente.nombre}:\n${tarea.instrucciones}`,
     tarea.comentario_ceo ? `La CEO pidió estos cambios (comprueba que estén hechos):\n${tarea.comentario_ceo}` : "",
     delAgente.length ? `Lo que ${agente.nombre} ha aprendido de la CEO (también debe cumplirlo):\n${delAgente.map((a) => `- ${a.texto}`).join("\n")}` : "",
@@ -347,6 +347,6 @@ async function terminarSiTodoRevisado(encargoId: string): Promise<void> {
   const texto = encargo[0].texto.replace(/\s+/g, " ").trim();
   await db.from("avisos").insert({
     encargo_id: encargoId,
-    mensaje: `Listo para revisar (${encargo[0].edificios?.nombre ?? "proyecto"}): ${texto.length > 70 ? `${texto.slice(0, 70)}…` : texto || "encargo con adjuntos"}`,
+    mensaje: `Listo para revisar (${encargo[0].edificios?.nombre ?? "organización"}): ${texto.length > 70 ? `${texto.slice(0, 70)}…` : texto || "encargo con adjuntos"}`,
   });
 }

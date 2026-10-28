@@ -9,11 +9,11 @@ type Props = {
   /** El Director: "+ Nuevo encargo" abre su formulario. */
   directorId?: string;
   avisos?: Aviso[];
-  /** El panel "Proyectos" está abierto: el botón lo cierra. */
-  proyectosAbierto?: boolean;
+  /** Panel de la cabecera que está abierto: su botón lo cierra. */
+  panel?: "organizaciones";
 };
 
-export default function Header({ directorId, avisos = [], proyectosAbierto = false }: Props) {
+export default function Header({ directorId, avisos = [], panel }: Props) {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-ink/95 backdrop-blur">
       <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-6 py-3">
@@ -25,12 +25,12 @@ export default function Header({ directorId, avisos = [], proyectosAbierto = fal
         <div className="flex-1" />
 
         <Link
-          href={proyectosAbierto ? "/" : "/?panel=proyectos"}
+          href={panel === "organizaciones" ? "/" : "/?panel=organizaciones"}
           scroll={false}
-          aria-current={proyectosAbierto ? "true" : undefined}
+          aria-current={panel === "organizaciones" ? "true" : undefined}
           className="btn-secondary"
         >
-          Proyectos
+          Organizaciones
         </Link>
 
         {directorId && <BotonNuevoEncargo directorId={directorId} />}

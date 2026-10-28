@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { activarProyecto, guardarFicha, guardarPerfil, guardarProyecto } from "@/lib/datos";
+import { activarOrganizacion, guardarFicha, guardarPerfil, guardarOrganizacion } from "@/lib/datos";
 import { IDIOMAS_PROYECTO, type IdiomaProyecto } from "@/lib/idiomas";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
@@ -16,7 +16,7 @@ async function comprobarSesion(): Promise<boolean> {
   return verifySessionToken((await cookies()).get(SESSION_COOKIE)?.value);
 }
 
-/** Guarda la ficha de un proyecto o el perfil de uno de sus agentes (desde el panel de la estantería). */
+/** Guarda la ficha de una organización o el perfil de uno de sus agentes (desde el panel de la estantería). */
 export async function guardarTexto(_prev: EstadoGuardado, formData: FormData): Promise<EstadoGuardado> {
   if (!(await comprobarSesion())) return { error: "Tu sesión ha caducado. Vuelve a entrar." };
 
@@ -37,13 +37,13 @@ export async function guardarTexto(_prev: EstadoGuardado, formData: FormData): P
   return { ok: "Guardado", texto };
 }
 
-export type EstadoProyecto = { ok?: string; error?: string };
+export type EstadoOrganizacion = { ok?: string; error?: string };
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 const USUARIO_INSTAGRAM = /^[A-Za-z0-9._]{1,30}$/;
 
-/** Crea un proyecto o guarda los cambios de uno (desde el panel "Proyectos" de la cabecera). */
-export async function guardarDatosProyecto(_prev: EstadoProyecto, formData: FormData): Promise<EstadoProyecto> {
+/** Crea una organización o guarda los cambios de una (desde el panel "Organizaciones" de la cabecera). */
+export async function guardarDatosOrganizacion(_prev: EstadoOrganizacion, formData: FormData): Promise<EstadoOrganizacion> {
   if (!(await comprobarSesion())) return { error: "Tu sesión ha caducado. Vuelve a entrar." };
 
   const id = String(formData.get("id") ?? "").trim() || null;
@@ -53,7 +53,7 @@ export async function guardarDatosProyecto(_prev: EstadoProyecto, formData: Form
   const ficha = String(formData.get("ficha") ?? "").replace(/\r\n/g, "\n").trim();
   const instagram = String(formData.get("instagram") ?? "").trim().replace(/^@/, "");
 
-  if (!nombre) return { error: "Escribe el nombre del proyecto." };
+  if (!nombre) return { error: "Escribe el nombre de la organización." };
   if (nombre.length > 80) return { error: "El nombre es demasiado largo (máximo 80 caracteres)." };
   if (!COLOR.test(color)) return { error: "Elige un color válido." };
   if (!(idioma in IDIOMAS_PROYECTO)) return { error: "Elige el idioma: español, catalán o inglés." };
@@ -64,21 +64,21 @@ export async function guardarDatosProyecto(_prev: EstadoProyecto, formData: Form
 
   let nuevoId: string;
   try {
-    nuevoId = await guardarProyecto(id, { nombre, color, idioma: idioma as IdiomaProyecto, ficha, instagram: instagram || null });
+    nuevoId = await guardarOrganizacion(id, { nombre, color, idioma: idioma as IdiomaProyecto, ficha, instagram: instagram || null });
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
-  // Un proyecto recién creado se queda abierto para seguir editándolo.
-  if (!id) redirect(`/?panel=proyectos&proyecto=${nuevoId}`);
+  // Una organización recién creada se queda abierta para seguir editándolo.
+  if (!id) redirect(`/?panel=organizaciones&organizacion=${nuevoId}`);
   refresh();
   return { ok: "Guardado" };
 }
 
-/** Archiva o vuelve a activar un proyecto (nunca se borra). */
-export async function cambiarActivoProyecto(formData: FormData): Promise<void> {
+/** Archiva o vuelve a activar una organización (nunca se borra). */
+export async function cambiarActivoOrganizacion(formData: FormData): Promise<void> {
   if (!(await comprobarSesion())) return;
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  await activarProyecto(id, formData.get("activo") === "true");
+  await activarOrganizacion(id, formData.get("activo") === "true");
   refresh();
 }

@@ -1,20 +1,20 @@
 import Link from "next/link";
-import { cambiarActivoProyecto } from "@/app/actions/proyecto";
+import { cambiarActivoOrganizacion } from "@/app/actions/organizacion";
 import { IDIOMAS_PROYECTO, type IdiomaProyecto } from "@/lib/idiomas";
 import type { Edificio } from "@/lib/tipos";
-import FormProyecto from "./FormProyecto";
+import FormOrganizacion from "./FormOrganizacion";
 
 type Props = {
-  /** Todos los proyectos, también los archivados. */
-  proyectos: Edificio[];
-  /** Proyecto que se está editando, o "nuevo". */
+  /** Todas las organizaciones (tabla edificios), también las archivadas. */
+  organizaciones: Edificio[];
+  /** Organización que se está editando, o "nueva". */
   seleccionado?: string;
 };
 
-/** Panel "Proyectos" de la cabecera: lista, crear, editar, archivar y volver a activar. */
-export default function PanelProyectos({ proyectos, seleccionado }: Props) {
+/** Panel "Organizaciones" de la cabecera: lista, crear, editar, archivar y volver a activar. */
+export default function PanelOrganizaciones({ organizaciones: proyectos, seleccionado }: Props) {
   const editando = proyectos.find((p) => p.id === seleccionado);
-  const nuevo = seleccionado === "nuevo";
+  const nuevo = seleccionado === "nueva";
   const activos = proyectos.filter((p) => p.activo !== false);
   const archivados = proyectos.filter((p) => p.activo === false);
 
@@ -25,11 +25,11 @@ export default function PanelProyectos({ proyectos, seleccionado }: Props) {
     >
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-panel/95 px-4 py-2 backdrop-blur">
         {editando || nuevo ? (
-          <Link href="/?panel=proyectos" scroll={false} className="flex min-h-11 items-center text-sm text-muted hover:text-text">
-            ← Todos los proyectos
+          <Link href="/?panel=organizaciones" scroll={false} className="flex min-h-11 items-center text-sm text-muted hover:text-text">
+            ← Todas las organizaciones
           </Link>
         ) : (
-          <span className="text-sm text-muted">Proyectos</span>
+          <span className="text-sm text-muted">Organizaciones</span>
         )}
         <Link
           href="/"
@@ -45,24 +45,24 @@ export default function PanelProyectos({ proyectos, seleccionado }: Props) {
         <div className="flex flex-col gap-6 p-5">
           <h2 id="panel-titulo" className="flex items-center gap-2.5 font-display text-2xl font-extrabold">
             {editando && <span aria-hidden="true" className="size-4 shrink-0 rounded-[4px]" style={{ background: editando.color }} />}
-            {editando ? editando.nombre : "Nuevo proyecto"}
-            {editando?.activo === false && <span className="text-sm font-normal text-muted">(archivado)</span>}
+            {editando ? editando.nombre : "Nueva organización"}
+            {editando?.activo === false && <span className="text-sm font-normal text-muted">(archivada)</span>}
           </h2>
-          <FormProyecto key={editando?.id ?? "nuevo"} proyecto={editando} />
+          <FormOrganizacion key={editando?.id ?? "nueva"} organizacion={editando} />
           {editando && <BotonActivo proyecto={editando} />}
         </div>
       ) : (
         <div className="flex flex-col gap-6 p-5">
           <div className="flex items-center justify-between gap-3">
             <h2 id="panel-titulo" className="font-display text-2xl font-extrabold">
-              Proyectos
+              Organizaciones
             </h2>
-            <Link href="/?panel=proyectos&proyecto=nuevo" scroll={false} className="btn-primary">
-              + Nuevo proyecto
+            <Link href="/?panel=organizaciones&organizacion=nueva" scroll={false} className="btn-primary">
+              + Nueva organización
             </Link>
           </div>
-          <Lista titulo="Activos" proyectos={activos} vacio="No hay ningún proyecto activo." />
-          {archivados.length > 0 && <Lista titulo="Archivados" proyectos={archivados} />}
+          <Lista titulo="Activas" proyectos={activos} vacio="No hay ninguna organización activa." />
+          {archivados.length > 0 && <Lista titulo="Archivadas" proyectos={archivados} />}
         </div>
       )}
     </aside>
@@ -71,7 +71,7 @@ export default function PanelProyectos({ proyectos, seleccionado }: Props) {
 
 function Lista({ titulo, proyectos, vacio }: { titulo: string; proyectos: Edificio[]; vacio?: string }) {
   return (
-    <section aria-label={`Proyectos ${titulo.toLowerCase()}`}>
+    <section aria-label={`Organizaciones ${titulo.toLowerCase()}`}>
       <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">{titulo}</h3>
       {proyectos.length === 0 ? (
         <p className="mt-2 text-sm text-muted">{vacio}</p>
@@ -88,7 +88,7 @@ function Lista({ titulo, proyectos, vacio }: { titulo: string; proyectos: Edific
                 </p>
               </div>
               <Link
-                href={`/?panel=proyectos&proyecto=${p.id}`}
+                href={`/?panel=organizaciones&organizacion=${p.id}`}
                 scroll={false}
                 className="flex min-h-11 items-center rounded-lg px-2 text-sm text-muted hover:text-text"
                 aria-label={`Editar ${p.nombre}`}
@@ -106,16 +106,16 @@ function Lista({ titulo, proyectos, vacio }: { titulo: string; proyectos: Edific
 function BotonActivo({ proyecto }: { proyecto: Edificio }) {
   const archivado = proyecto.activo === false;
   return (
-    <form action={cambiarActivoProyecto} className="border-t border-line pt-5">
+    <form action={cambiarActivoOrganizacion} className="border-t border-line pt-5">
       <input type="hidden" name="id" value={proyecto.id} />
       <input type="hidden" name="activo" value={archivado ? "true" : "false"} />
       <p className="mb-3 text-sm text-muted">
         {archivado
-          ? "Este proyecto está archivado: no aparece en la oficina ni en los encargos."
-          : "Archivar lo oculta de la oficina y de los encargos. No se borra nada y puedes volver a activarlo."}
+          ? "Esta organización está archivada: no aparece en la oficina, en los encargos ni en los proyectos."
+          : "Archivarla la oculta de la oficina, de los encargos y de los proyectos. No se borra nada y puedes volver a activarla."}
       </p>
       <button type="submit" className="btn-secondary">
-        {archivado ? "Volver a activar" : "Archivar proyecto"}
+        {archivado ? "Volver a activar" : "Archivar organización"}
       </button>
     </form>
   );

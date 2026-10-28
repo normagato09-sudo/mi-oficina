@@ -82,14 +82,14 @@ const INSTRUCCIONES_REPARTO = `Ahora tu trabajo es REPARTIR este encargo, no hac
 - Cada agente SOLO puede entregar lo que pone en su "Entrega". Pide únicamente eso: nunca PDF, Word, archivos .txt, A4 para imprimir, vídeos ni nada que no esté en su lista.
 - Para cada uno, escribe instrucciones claras y concretas: qué tiene que entregar (de su lista) y en qué idioma, y copia los datos exactos que necesite (fechas, horas, lugares, nombres, cifras). No inventes datos.
 - Si varios agentes trabajan en el mismo encargo, dales a todos exactamente los mismos datos (fechas, horas, lugar) para que digan lo mismo.
-- Si falta un dato imprescindible que no se puede sacar del encargo, de los adjuntos ni de la ficha del proyecto, NO repartas: haz una sola pregunta, corta y concreta, a la CEO (accion "preguntar", tareas vacías). No preguntes por lo que puedes decidir tú con sentido común (tono, hashtags, diseño, longitud…).
+- Si falta un dato imprescindible que no se puede sacar del encargo, de los adjuntos ni de la ficha de la organización, NO repartas: haz una sola pregunta, corta y concreta, a la CEO (accion "preguntar", tareas vacías). No preguntes por lo que puedes decidir tú con sentido común (tono, hashtags, diseño, longitud…).
 - Las fotos e imágenes NO son imprescindibles: el Diseñador hace carteles sin foto (plantillas convocatoria y frase o dato) e Instagram puede publicar el cartel. Nunca preguntes por fotos, imágenes, logos ni colores.
 - Si repartes, deja "pregunta" vacía.
 - Escribe el resumen, la pregunta y las instrucciones en español.`;
 
 /** Lo que lee el Director: el encargo, los PDF, las preguntas ya respondidas y el equipo con lo que entrega cada uno. */
 function mensajeReparto(encargo: Encargo, proyecto: string, equipo: (Agente & { despacho: Despacho })[], imagenes: number): string {
-  const partes = [`Encargo para el proyecto "${proyecto}"${encargo.urgente ? " (URGENTE)" : ""}:\n${textoEncargo(encargo, imagenes)}`];
+  const partes = [`Encargo para la organización "${proyecto}"${encargo.urgente ? " (URGENTE)" : ""}:\n${textoEncargo(encargo, imagenes)}`];
   if (encargo.adjuntos.some((a) => a.tipo === "imagen")) partes.push("Los agentes recibirán las imágenes adjuntas con su tarea.");
 
   const preguntas = (encargo.preguntas ?? []).filter((p): p is Pregunta & { respuesta: string } => p.respuesta !== null);
@@ -143,7 +143,7 @@ async function decidir(encargo: Encargo): Promise<Decision> {
 
   const decision = await generarEstructurado<Decision>({
     sistema: conAprendizajes(`${sistemaDeAgente(contexto)}\n\n${INSTRUCCIONES_REPARTO}`, aprendizajes),
-    mensaje: mensajeReparto(encargo, contexto.proyecto.nombre, equipo, imagenes.length),
+    mensaje: mensajeReparto(encargo, contexto.organizacion.nombre, equipo, imagenes.length),
     imagenes,
     nombre: "reparto_director",
     esquema: esquemaReparto(equipo.map((a) => a.id)),

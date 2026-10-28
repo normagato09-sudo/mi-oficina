@@ -111,7 +111,7 @@ export default function PlantillasCartel({ proyectos, fotos }: Props) {
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2 flex flex-col gap-1">
           <label htmlFor={`${id}-proyecto`} className="text-sm font-semibold">
-            Proyecto
+            Organización
           </label>
           <select id={`${id}-proyecto`} value={proyectoId} onChange={(e) => setProyectoId(e.target.value)} className={CAMPO}>
             {proyectos.map((p) => (
