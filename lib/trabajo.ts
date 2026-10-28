@@ -3,6 +3,7 @@ import { aprendizajesPara, conAprendizajes } from "./aprendizajes";
 import { contextoAgente, sistemaDeAgente } from "./datos";
 import type { Encargo, EstadoTarea, Tarea } from "./encargos";
 import type { EstadoEncargo } from "./encargos-reglas";
+import { cargarOrigenProyecto, comprobarFase, tareasDeProyectoListas, type TareaDelProyecto } from "./ejecucion";
 import { generarEstructurado, IAError } from "./ia";
 import { ENCADENADO, ahoraConMargen, avisoDeError, cargarImagenes, conReintento, pasoHasta, textoEncargo } from "./pasos";
 import { supabase } from "./supabase";
@@ -23,40 +24,52 @@ const MAX_VUELTAS = 2;
 /** Lo que el Director lee de cada entrega al revisar (la cuenta gratuita de Groq admite 8.000 tokens por minuto). */
 const MAX_CARACTERES_ENTREGA = 6_000;
 const MAX_CARACTERES_OTRA_ENTREGA = 1_500;
+/** Lo que lee el agente de cada tarea de la que depende (proyectos). */
+const MAX_CARACTERES_DEPENDENCIA = 1_500;
 
 /** Paso siguiente al tomar una tarea, y el paso al que vuelve si algo falla. */
 const AL_TOMAR: Partial<Record<EstadoTarea, EstadoTarea>> = { pendiente: "en_curso", revision: "revisando" };
 const AL_FALLAR: Partial<Record<EstadoTarea, EstadoTarea>> = { en_curso: "pendiente", revisando: "revision" };
 
 type TareaConEncargo = Tarea & {
-  encargos: Pick<Encargo, "estado" | "urgente" | "orden"> | null;
+  encargos: Pick<Encargo, "estado" | "urgente" | "orden" | "creado_en"> | null;
 };
 
 /**
- * Toma la siguiente tarea que toque (de los encargos repartidos, urgentes primero; dentro de cada uno,
- * primero las revisiones). De una en una: si otra ejecución tiene una tarea entre manos, no toma ninguna.
+ * Toma la siguiente tarea que toque, de los encargos repartidos y de los proyectos en marcha: primero las
+ * de encargos urgentes y después por orden de llegada (del encargo o del proyecto); dentro de cada uno,
+ * primero las revisiones. De una en una: si otra ejecución tiene una tarea entre manos, no toma ninguna.
  */
 export async function tomarTareaLista(): Promise<Tarea | null> {
   const db = supabase();
   const ahora = ahoraConMargen();
-  const [{ data: ocupadas, error: e1 }, { data: candidatas, error: e2 }] = await Promise.all([
+  const [{ data: ocupadas, error: e1 }, { data: candidatas, error: e2 }, deProyectos] = await Promise.all([
     db.from("tareas").select("id").in("estado", ["en_curso", "revisando"]).gt("paso_hasta", new Date().toISOString()).limit(1),
     db
       .from("tareas")
-      .select("*, encargos!inner(estado, urgente, orden)")
+      .select("*, encargos!inner(estado, urgente, orden, creado_en)")
       .in("estado", ["pendiente", "revision"] satisfies EstadoTarea[])
       .eq("encargos.estado", "repartido" satisfies EstadoEncargo)
       .returns<TareaConEncargo[]>(),
+    tareasDeProyectoListas(),
   ]);
   if (e1 || e2) throw new Error(`No se pudieron leer las tareas: ${(e1 ?? e2)!.message}`);
   if (ocupadas?.length) return null;
 
-  const listas = (candidatas ?? [])
+  const todas: TareaDelProyecto[] = [
+    ...(candidatas ?? []).map(({ encargos, ...t }) => ({
+      ...t,
+      urgente: Boolean(encargos?.urgente),
+      llegada: encargos?.creado_en ?? t.creado_en,
+    })),
+    ...deProyectos,
+  ];
+  const listas = todas
     .filter((t) => (!t.reintentar_en || t.reintentar_en <= ahora) && (!t.paso_hasta || t.paso_hasta < ahora))
     .sort(
       (a, b) =>
-        Number(b.encargos?.urgente) - Number(a.encargos?.urgente) ||
-        (a.encargos?.orden ?? 0) - (b.encargos?.orden ?? 0) ||
+        Number(b.urgente) - Number(a.urgente) ||
+        a.llegada.localeCompare(b.llegada) ||
         Number(b.estado === "revision") - Number(a.estado === "revision") ||
         a.creado_en.localeCompare(b.creado_en),
     );
@@ -83,11 +96,23 @@ async function actualizarTarea(id: string, cambios: Record<string, unknown>): Pr
   if (error) throw new Error(`No se pudo actualizar la tarea: ${error.message}`);
 }
 
+/** De dónde viene la tarea: su encargo o, en un proyecto, el proyecto (con su texto y adjuntos). */
+export type OrigenTarea = Pick<Encargo, "edificio_id" | "director_id" | "texto" | "adjuntos">;
+
+/** Lo que además lee el agente en una tarea de proyecto. */
+export type DelProyecto = {
+  nombre: string;
+  fase: { numero: number; total: number; nombre: string; objetivo: string };
+  /** Las tareas de las que depende, ya revisadas por el Director, con su resultado. */
+  dependencias: { clave: string; titulo: string; agente: string; resultado: string }[];
+};
+
 type Contexto = {
   tarea: Tarea;
   agente: Agente & { despacho: DespachoTrabajo };
-  encargo: Encargo & { edificios: { nombre: string } | null };
-  /** Las demás tareas del mismo encargo (para que todos digan lo mismo). */
+  encargo: OrigenTarea;
+  proyecto: DelProyecto | null;
+  /** Las demás tareas del mismo encargo, o de las que depende en un proyecto (para que todos digan lo mismo). */
   otras: (Pick<Tarea, "id" | "estado" | "resultado" | "instrucciones"> & { agentes: { nombre: string } | null })[];
 };
 
@@ -108,8 +133,10 @@ export async function procesarTarea(tarea: Tarea, inicio: number): Promise<void>
     const aviso = avisoDeError(e);
     const quien = ctx?.agente.nombre ?? "Un agente";
     console.error(`Tarea ${tarea.id}:`, aviso);
-    // La tarea vuelve a su paso anterior y el encargo se queda en rojo con "Reintentar".
+    // La tarea vuelve a su paso anterior y el encargo se queda en rojo con "Reintentar"
+    // (en un proyecto, la tarea: "Reintentar" en esa tarea y el Director en rojo).
     await actualizarTarea(tarea.id, { estado: AL_FALLAR[tarea.estado] ?? tarea.estado, aviso, paso_hasta: null, reintentar_en: null });
+    if (!tarea.encargo_id) return;
     await supabase()
       .from("encargos")
       .update({ estado: "error" satisfies EstadoEncargo, aviso: `${tarea.estado === "revisando" ? `Al revisar a ${quien}` : quien}: ${aviso}` })
@@ -120,6 +147,27 @@ export async function procesarTarea(tarea: Tarea, inicio: number): Promise<void>
 
 async function cargarContexto(tarea: Tarea): Promise<Contexto> {
   const db = supabase();
+  if (!tarea.encargo_id) {
+    const [{ data: agente, error: e1 }, origen] = await Promise.all([
+      db.from("agentes").select("*").eq("id", tarea.agente_id).single<Agente>(),
+      cargarOrigenProyecto(tarea),
+    ]);
+    if (e1) throw new Error(`No se pudo leer el agente: ${e1.message}`);
+    if (!esDespachoTrabajo(agente.despacho)) throw new IAError(`${agente.nombre} no tiene un despacho de trabajo.`);
+    return {
+      tarea,
+      agente: agente as Contexto["agente"],
+      encargo: origen.encargo,
+      proyecto: origen.proyecto,
+      otras: origen.proyecto.dependencias.map((d) => ({
+        id: d.clave,
+        estado: "revisada" as const,
+        resultado: d.resultado,
+        instrucciones: d.titulo,
+        agentes: { nombre: d.agente },
+      })),
+    };
+  }
   const [{ data: agente, error: e1 }, { data: encargo, error: e2 }] = await Promise.all([
     db.from("agentes").select("*").eq("id", tarea.agente_id).single<Agente>(),
     db
@@ -132,7 +180,7 @@ async function cargarContexto(tarea: Tarea): Promise<Contexto> {
   if (e2) throw new Error(`No se pudo leer el encargo: ${e2.message}`);
   if (!esDespachoTrabajo(agente.despacho)) throw new IAError(`${agente.nombre} no tiene un despacho de trabajo.`);
   const { tareas, ...resto } = encargo;
-  return { tarea, agente: agente as Contexto["agente"], encargo: resto, otras: (tareas ?? []).filter((t) => t.id !== tarea.id) };
+  return { tarea, agente: agente as Contexto["agente"], encargo: resto, proyecto: null, otras: (tareas ?? []).filter((t) => t.id !== tarea.id) };
 }
 
 /* ───────────── El agente trabaja ───────────── */
@@ -150,12 +198,12 @@ const INDICACIONES: Partial<Record<DespachoTrabajo, string>> = {
   finanzas: "Usa solo las cifras que te dan; si falta una, ponlo en \"avisos\" en vez de inventarla. Cada fila con un valor por columna.",
 };
 
-function instruccionesTrabajo(despacho: DespachoTrabajo): string {
+function instruccionesTrabajo(despacho: DespachoTrabajo, enProyecto = false): string {
   return [
     "Ahora haz la tarea que te ha encargado el Director.",
     `Lo que entregas: ${ENTREGAS[despacho]}`,
     INDICACIONES[despacho],
-    "Usa solo los datos del encargo, de los adjuntos, de las instrucciones del Director y de la ficha de la organización: nunca inventes fechas, horas, lugares, nombres, cifras ni enlaces. Si te falta un dato, dilo en tu nota en vez de inventarlo.",
+    `Usa solo los datos del ${enProyecto ? "proyecto, de las entregas de las que depende tu tarea" : "encargo"}, de los adjuntos, de las instrucciones del Director y de la ficha de la organización: nunca inventes fechas, horas, lugares, nombres, cifras ni enlaces. Si te falta un dato, dilo en tu nota en vez de inventarlo.`,
     "En \"nota\", explica en una o dos frases qué has hecho y por qué.",
   ]
     .filter(Boolean)
@@ -188,8 +236,24 @@ async function datosUltimaSemana(): Promise<string> {
   return [...porProyecto].map(([p, lineas]) => `${p}:\n${lineas.join("\n")}`).join("\n\n");
 }
 
+/** Lo que lee de un proyecto un agente (o el Director al revisar): el proyecto, la fase y lo que necesita de otras tareas. */
+function partesProyecto(p: DelProyecto, origen: OrigenTarea, imagenes: number, maxPorDependencia: number): string[] {
+  const partes = [
+    `Proyecto de la CEO "${p.nombre}":\n${textoEncargo(origen, imagenes, 2_000)}`,
+    `Fase ${p.fase.numero} de ${p.fase.total}: ${p.fase.nombre}. Objetivo de la fase: ${p.fase.objetivo}`,
+  ];
+  if (p.dependencias.length) {
+    partes.push(
+      `Resultados de las tareas de las que depende esta (ya revisados por el Director; úsalos y no los contradigas):\n${p.dependencias
+        .map((d) => `--- ${d.clave} · ${d.titulo} (${d.agente}):\n${d.resultado.slice(0, maxPorDependencia)}`)
+        .join("\n\n")}`,
+    );
+  }
+  return partes;
+}
+
 /** Una llamada a la IA: el agente hace su tarea. Devuelve cómo guardarla (pasa a revisión). */
-async function trabajar({ tarea, agente, encargo }: Contexto): Promise<() => Promise<void>> {
+async function trabajar({ tarea, agente, encargo, proyecto }: Contexto): Promise<() => Promise<void>> {
   const [contexto, imagenes, semana, aprendizajes] = await Promise.all([
     contextoAgente(agente.id, encargo.edificio_id),
     cargarImagenes(encargo),
@@ -197,7 +261,12 @@ async function trabajar({ tarea, agente, encargo }: Contexto): Promise<() => Pro
     aprendizajesPara(agente.id, encargo.edificio_id),
   ]);
 
-  const partes = [`Instrucciones del Director para ti:\n${tarea.instrucciones}`, `Encargo original de la CEO:\n${textoEncargo(encargo, imagenes.length)}`];
+  const partes = proyecto
+    ? [
+        `Instrucciones del Director para ti (tarea ${tarea.clave ?? ""} del plan):\n${tarea.instrucciones}`,
+        ...partesProyecto(proyecto, encargo, imagenes.length, MAX_CARACTERES_DEPENDENCIA),
+      ]
+    : [`Instrucciones del Director para ti:\n${tarea.instrucciones}`, `Encargo original de la CEO:\n${textoEncargo(encargo, imagenes.length)}`];
   if (semana) partes.push(`Datos reales de la oficina (encargos y tareas de los últimos 7 días):\n${semana}`);
   if (tarea.comentario_ceo) {
     partes.push(
@@ -211,7 +280,7 @@ async function trabajar({ tarea, agente, encargo }: Contexto): Promise<() => Pro
   }
 
   const crudo = await generarEstructurado<unknown>({
-    sistema: conAprendizajes(`${sistemaDeAgente(contexto)}\n\n${instruccionesTrabajo(agente.despacho)}`, aprendizajes),
+    sistema: conAprendizajes(`${sistemaDeAgente(contexto)}\n\n${instruccionesTrabajo(agente.despacho, Boolean(proyecto))}`, aprendizajes),
     mensaje: partes.join("\n\n"),
     imagenes,
     nombre: `trabajo_${agente.despacho}`,
@@ -242,7 +311,7 @@ async function trabajar({ tarea, agente, encargo }: Contexto): Promise<() => Pro
 
 const INSTRUCCIONES_REVISION = `Ahora REVISAS el trabajo que ha entregado un agente del equipo. Compruébalo con cuidado:
 1. Que cumpla tus instrucciones y entregue lo que se le pidió.
-2. Que no haya NINGÚN dato inventado (fecha, hora, lugar, nombre, cifra, enlace) que no esté en el encargo, en los adjuntos, en tus instrucciones o en la ficha del proyecto.
+2. Que no haya NINGÚN dato inventado (fecha, hora, lugar, nombre, cifra, enlace) que no esté en el encargo, en los adjuntos, en tus instrucciones o en la ficha de la organización (en un proyecto, también valen el proyecto y las entregas de las que depende).
 3. Que el tono y el idioma sean los de la organización (o los que pediste).
 4. Si hay otras entregas del mismo encargo, que digan lo mismo (mismas fechas, horas y lugar).
 Si está bien, "correcto": true y "comentarios" vacío. Si algo falla, "correcto": false y en "comentarios" di exactamente qué tiene que cambiar, de forma concreta (no repitas lo que está bien).
@@ -263,14 +332,16 @@ const ESQUEMA_REVISION = {
 };
 
 /** Una llamada a la IA: el Director revisa la entrega. Devuelve cómo guardar su decisión. */
-async function revisar({ tarea, agente, encargo, otras }: Contexto): Promise<() => Promise<void>> {
+async function revisar({ tarea, agente, encargo, proyecto, otras }: Contexto): Promise<() => Promise<void>> {
   const [contexto, delDirector, delAgente] = await Promise.all([
     contextoAgente(encargo.director_id, encargo.edificio_id),
     aprendizajesPara(encargo.director_id, encargo.edificio_id),
     aprendizajesPara(agente.id, encargo.edificio_id),
   ]);
   const partes = [
-    `Encargo original de la CEO (organización "${contexto.organizacion.nombre}"):\n${textoEncargo(encargo, 0, 2_000)}`,
+    ...(proyecto
+      ? partesProyecto({ ...proyecto, dependencias: [] }, encargo, 0, 0)
+      : [`Encargo original de la CEO (organización "${contexto.organizacion.nombre}"):\n${textoEncargo(encargo, 0, 2_000)}`]),
     `Instrucciones que le diste a ${agente.nombre}:\n${tarea.instrucciones}`,
     tarea.comentario_ceo ? `La CEO pidió estos cambios (comprueba que estén hechos):\n${tarea.comentario_ceo}` : "",
     delAgente.length ? `Lo que ${agente.nombre} ha aprendido de la CEO (también debe cumplirlo):\n${delAgente.map((a) => `- ${a.texto}`).join("\n")}` : "",
@@ -280,7 +351,7 @@ async function revisar({ tarea, agente, encargo, otras }: Contexto): Promise<() 
   const conEntrega = otras.filter((o) => o.resultado.trim());
   if (conEntrega.length) {
     partes.push(
-      `Otras entregas del mismo encargo (deben decir lo mismo):\n${conEntrega
+      `${proyecto ? "Entregas de las que depende esta (deben decir lo mismo)" : "Otras entregas del mismo encargo (deben decir lo mismo)"}:\n${conEntrega
         .map((o) => `--- ${o.agentes?.nombre ?? "Agente"}:\n${o.resultado.slice(0, MAX_CARACTERES_OTRA_ENTREGA)}`)
         .join("\n\n")}`,
     );
@@ -320,7 +391,8 @@ async function revisar({ tarea, agente, encargo, otras }: Contexto): Promise<() 
         reintentos: 0,
       });
     }
-    await terminarSiTodoRevisado(tarea.encargo_id);
+    if (tarea.proyecto_id) await comprobarFase(tarea.proyecto_id);
+    else if (tarea.encargo_id) await terminarSiTodoRevisado(tarea.encargo_id);
   };
 }
 

@@ -1,4 +1,4 @@
-import { TEXTO_ESTADO_PROYECTO, type EstadoProyecto } from "@/lib/proyectos-reglas";
+import { TEXTO_ESTADO_PROYECTO, type EstadoFase, type EstadoProyecto } from "@/lib/proyectos-reglas";
 
 /** Color de la etiqueta de cada estado: rojo si me necesita, ámbar si el Director trabaja, verde si va bien. */
 const TONO: Record<EstadoProyecto, string> = {
@@ -8,14 +8,27 @@ const TONO: Record<EstadoProyecto, string> = {
   aprobado: "bg-emerald-500/20 text-emerald-300",
   en_espera: "bg-panel-2 text-muted",
   en_marcha: "bg-sky-500/20 text-sky-300",
+  final_revision: "bg-red-500/20 text-red-300",
   terminado: "bg-emerald-500/20 text-emerald-300",
   cancelado: "bg-panel-2 text-muted",
 };
 
-export function EtiquetaEstado({ estado, turno, aviso }: { estado: EstadoProyecto; turno: number | null; aviso?: boolean }) {
-  if (aviso && estado === "borrador") {
-    return <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-300">Error en el plan</span>;
-  }
+export function EtiquetaEstado({
+  estado,
+  turno,
+  aviso,
+  faseEstado,
+}: {
+  estado: EstadoProyecto;
+  turno: number | null;
+  aviso?: boolean;
+  /** En marcha: cómo va la fase actual. */
+  faseEstado?: EstadoFase | null;
+}) {
+  const rojo = (texto: string) => <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-300">{texto}</span>;
+  if (aviso && estado === "borrador") return rojo("Error en el plan");
+  if (aviso && estado === "en_marcha") return rojo("Error");
+  if (estado === "en_marcha" && faseEstado === "para_revisar") return rojo("Fase para revisar");
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${TONO[estado]}`}>
       {TEXTO_ESTADO_PROYECTO[estado]}

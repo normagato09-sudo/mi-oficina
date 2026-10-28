@@ -23,7 +23,12 @@ export default function ProyectosDirector({ proyectos }: { proyectos: ProyectoRe
                   <span aria-hidden="true" className="size-2 rounded-[2px]" style={{ background: p.organizacion.color }} />
                   {p.organizacion.nombre}
                 </span>
-                <EtiquetaEstado estado={p.estado} turno={p.turno} aviso={Boolean(p.aviso)} />
+                <EtiquetaEstado estado={p.estado} turno={p.turno} aviso={Boolean(p.aviso)} faseEstado={p.fase_estado} />
+                {p.fase && (
+                  <span className="text-xs text-muted">
+                    Fase {p.fase.numero} de {p.fase.total}
+                  </span>
+                )}
               </span>
               <span className="text-sm font-semibold">{p.nombre}</span>
             </Link>

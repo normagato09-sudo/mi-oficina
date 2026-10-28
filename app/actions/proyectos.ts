@@ -4,7 +4,9 @@ import { cookies } from "next/headers";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { aprenderDeTarea, editarTarea, type Edicion } from "@/lib/aprobar";
 import { avanzarCola } from "@/lib/cola";
+import { aprobarFase, aprobarFinal, marcarTareaCeo, pedirCambiosFase, reintentarEnMarcha } from "@/lib/ejecucion";
 import { cargarOrganizaciones } from "@/lib/datos";
 import { prepararSubidas, type ArchivoPedido, type SubidaPreparada } from "@/lib/encargos";
 import {
@@ -13,6 +15,7 @@ import {
   cargarDirectorOficina,
   crearProyecto,
   pedirCambiosPlan,
+  leerEstadoProyecto,
   reintentarPlan,
   responderPreguntasProyecto,
 } from "@/lib/proyectos";
@@ -88,8 +91,9 @@ export async function responderProyecto(id: string, respuesta: string): Promise<
   return hacer(() => responderPreguntasProyecto(String(id), String(respuesta ?? "")), true);
 }
 
+/** Aprobar el plan: si hay hueco, la cola lo pone en marcha enseguida. */
 export async function aprobarPlanAccion(id: string): Promise<Resultado> {
-  return hacer(() => aprobarPlan(String(id)));
+  return hacer(() => aprobarPlan(String(id)), true);
 }
 
 export async function pedirCambiosAccion(id: string, comentario: string): Promise<Resultado> {
@@ -100,6 +104,34 @@ export async function cancelarProyectoAccion(id: string): Promise<Resultado> {
   return hacer(() => cancelarProyecto(String(id)));
 }
 
+/** "Reintentar": el plan (borrador) o, en marcha, el paso del Director o las tareas que fallaron. */
 export async function reintentarProyectoAccion(id: string): Promise<Resultado> {
-  return hacer(() => reintentarPlan(String(id)), true);
+  return hacer(async () => ((await leerEstadoProyecto(String(id))) === "en_marcha" ? reintentarEnMarcha(String(id)) : reintentarPlan(String(id))), true);
+}
+
+/** Marco como hecha una tarea mía de la fase actual. */
+export async function marcarTareaCeoAccion(id: string, clave: string, nota: string): Promise<Resultado> {
+  return hacer(() => marcarTareaCeo(String(id), String(clave), String(nota ?? "")), true);
+}
+
+/** "Aprobar fase": empieza la siguiente (o el Director escribe el final). */
+export async function aprobarFaseAccion(id: string): Promise<Resultado> {
+  return hacer(() => aprobarFase(String(id)), true);
+}
+
+/** "Pedir cambios" en la fase: el Director decide qué tareas rehacer. */
+export async function pedirCambiosFaseAccion(id: string, comentario: string): Promise<Resultado> {
+  return hacer(() => pedirCambiosFase(String(id), String(comentario ?? "")), true);
+}
+
+/** "Aprobar final": el proyecto termina y el siguiente en espera puede empezar. */
+export async function aprobarFinalAccion(id: string): Promise<Resultado> {
+  return hacer(() => aprobarFinal(String(id)), true);
+}
+
+/** Guardar mi versión de una entrega del proyecto. El Director aprende de la diferencia (en segundo plano). */
+export async function editarEntregaAccion(tareaId: string, edicion: Edicion): Promise<Resultado> {
+  const r = await hacer(() => editarTarea(String(tareaId), edicion));
+  if (r.ok) after(() => aprenderDeTarea(String(tareaId), "edicion"));
+  return r;
 }

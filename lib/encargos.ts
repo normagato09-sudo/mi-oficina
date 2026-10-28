@@ -54,7 +54,8 @@ export type EstadoTarea = "pendiente" | "en_curso" | "revision" | "revisando" | 
 /** Lo que el Director ha encargado a un agente (migración 0010). */
 export type Tarea = {
   id: string;
-  encargo_id: string;
+  /** El encargo de la tarea, o null si es de un proyecto (migración 0016). */
+  encargo_id: string | null;
   agente_id: string;
   instrucciones: string;
   estado: EstadoTarea;
@@ -86,6 +87,15 @@ export type Tarea = {
   texto_editado?: string | null;
   /** Comentario de la CEO al pedir cambios. */
   comentario_ceo?: string | null;
+  // Tareas de proyectos (migración 0016):
+  proyecto_id?: string | null;
+  /** Fase del plan (0 = la primera). */
+  fase?: number | null;
+  /** Id de la tarea en el plan ("T1"…). */
+  clave?: string | null;
+  titulo?: string | null;
+  /** Claves de las tareas cuyo resultado necesita. */
+  depende_de?: string[];
 };
 
 /** Encargo listo para mostrar: imágenes con URL firmada, el proyecto con nombre y color y a quién se ha repartido. */

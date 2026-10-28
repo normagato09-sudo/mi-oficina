@@ -2,6 +2,7 @@ import "server-only";
 import { aprenderDe } from "./aprendizajes";
 import type { Encargo, EstadoTarea, Tarea } from "./encargos";
 import type { EstadoEncargo } from "./encargos-reglas";
+import { cargarDirectorOficina, type Proyecto } from "./proyectos";
 import { supabase } from "./supabase";
 import { esDespachoTrabajo, leerResultado, textoDeResultado, type Resultado } from "./trabajos";
 import type { Agente } from "./tipos";
@@ -17,6 +18,8 @@ const MAX_CARACTERES_COMENTARIO = 2_000;
 type TareaCompleta = Tarea & {
   agentes: Pick<Agente, "id" | "nombre" | "despacho"> | null;
   encargos: (Pick<Encargo, "id" | "texto" | "estado" | "edificio_id" | "director_id"> & { edificios: { nombre: string } | null }) | null;
+  /** Si es una tarea de proyecto (migración 0016): su proyecto. */
+  proyecto?: Pick<Proyecto, "id" | "nombre" | "objetivo" | "estado" | "fase_estado" | "fase_actual" | "edificio_id" | "director_id"> | null;
 };
 
 async function cargarTarea(id: string): Promise<TareaCompleta> {
@@ -26,12 +29,30 @@ async function cargarTarea(id: string): Promise<TareaCompleta> {
     .eq("id", id)
     .maybeSingle<TareaCompleta>();
   if (error) throw new Error(`No se pudo leer la tarea: ${error.message}`);
+  if (data?.proyecto_id && data.agentes) {
+    const { data: proyecto, error: e2 } = await supabase()
+      .from("proyectos")
+      .select("id, nombre, objetivo, estado, fase_estado, fase_actual, edificio_id, director_id")
+      .eq("id", data.proyecto_id)
+      .maybeSingle<NonNullable<TareaCompleta["proyecto"]>>();
+    if (e2) throw new Error(`No se pudo leer el proyecto: ${e2.message}`);
+    if (proyecto) return { ...data, proyecto };
+  }
   if (!data || !data.encargos || !data.agentes) throw new Error("Esta tarea ya no existe.");
   return data;
 }
 
 function soloSiLista(tarea: Tarea) {
   if (tarea.estado !== "lista") throw new Error("Este trabajo ya no está esperando tu revisión.");
+}
+
+/** Se puede editar: un trabajo listo de un encargo o, en un proyecto, una entrega de la fase que reviso o del final. */
+function soloSiEditable(tarea: TareaCompleta) {
+  const p = tarea.proyecto;
+  if (!p) return soloSiLista(tarea);
+  const enRevision =
+    (p.estado === "en_marcha" && p.fase_estado === "para_revisar" && tarea.fase === p.fase_actual) || p.estado === "final_revision";
+  if (!enRevision || !["revisada", "lista", "aprobada"].includes(tarea.estado)) throw new Error("Esta entrega ya no se puede editar.");
 }
 
 /* ───────────── Editar ───────────── */
@@ -42,7 +63,7 @@ export type Edicion = { tipo: "datos"; resultado: Resultado } | { tipo: "texto";
 /** Guarda mi versión. La del agente se conserva (la primera vez) para aprender de la diferencia. */
 export async function editarTarea(id: string, edicion: Edicion): Promise<void> {
   const tarea = await cargarTarea(id);
-  soloSiLista(tarea);
+  soloSiEditable(tarea);
   const despacho = tarea.agentes!.despacho;
   if (!esDespachoTrabajo(despacho)) throw new Error("Este trabajo no se puede editar.");
 
@@ -62,7 +83,7 @@ export async function editarTarea(id: string, edicion: Edicion): Promise<void> {
     cambios.resultado_agente = tarea.resultado_json ?? null;
     cambios.resultado_agente_texto = tarea.resultado;
   }
-  const { error } = await supabase().from("tareas").update(cambios).eq("id", id).eq("estado", "lista" satisfies EstadoTarea);
+  const { error } = await supabase().from("tareas").update(cambios).eq("id", id).eq("estado", tarea.estado);
   if (error) throw new Error(`No se pudo guardar: ${error.message}`);
 }
 
@@ -125,12 +146,17 @@ export async function aprenderDeTarea(id: string, origen: "edicion" | "cambios",
     const versionAgente = origen === "edicion" ? (tarea.resultado_agente_texto ?? "") : (versionAntes ?? tarea.resultado);
     const cambioCeo = origen === "edicion" ? tarea.resultado : (tarea.comentario_ceo ?? "");
     if (!versionAgente.trim() || !cambioCeo.trim() || versionAgente.trim() === cambioCeo.trim()) return;
+    const p = tarea.proyecto;
+    const directorId = p ? (p.director_id ?? (await cargarDirectorOficina())?.id) : tarea.encargos!.director_id;
+    if (!directorId) return;
     await aprenderDe({
       tareaId: id,
       agente: { id: tarea.agentes!.id, nombre: tarea.agentes!.nombre },
-      directorId: tarea.encargos!.director_id,
-      proyectoId: tarea.encargos!.edificio_id,
-      encargo: tarea.encargos!.texto,
+      directorId,
+      proyectoId: p ? p.edificio_id : tarea.encargos!.edificio_id,
+      encargo: p ? `Proyecto "${p.nombre}": ${p.objetivo}
+
+Tarea: ${tarea.instrucciones}` : tarea.encargos!.texto,
       versionAgente,
       origen,
       cambioCeo,

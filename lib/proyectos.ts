@@ -1,7 +1,29 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { comprobarSubidas, conAdjuntos, firmarImagenes, MINUTOS_ATASCADO, type Adjunto, type AdjuntoImagen, type AdjuntoPdf, type Pregunta } from "./encargos";
-import { MAX_CARACTERES_PROYECTO, MAX_NOMBRE_PROYECTO, type EstadoProyecto, type Plan, type VersionPlan } from "./proyectos-reglas";
+import {
+  comprobarSubidas,
+  conAdjuntos,
+  firmarImagenes,
+  MINUTOS_ATASCADO,
+  type Adjunto,
+  type AdjuntoImagen,
+  type AdjuntoPdf,
+  type EncargoVista,
+  type Pregunta,
+  type Tarea,
+} from "./encargos";
+import {
+  MAX_CARACTERES_PROYECTO,
+  MAX_NOMBRE_PROYECTO,
+  type EntregaProyecto,
+  type EstadoFase,
+  type EstadoProyecto,
+  type InfoFase,
+  type Plan,
+  type ResumenFinal,
+  type TareaCeoHecha,
+  type VersionPlan,
+} from "./proyectos-reglas";
 import { supabase } from "./supabase";
 import type { Agente, Edificio } from "./tipos";
 
@@ -35,27 +57,44 @@ export type Proyecto = {
   reintentos: number;
   creado_en: string;
   actualizado_en: string;
+  // En marcha (migración 0016; pueden faltar si aún no se ha ejecutado):
+  /** Fase en la que está (0 = la primera). */
+  fase_actual?: number;
+  fase_estado?: EstadoFase | null;
+  fases?: InfoFase[];
+  /** Mis tareas hechas, por clave ("T4"). */
+  tareas_ceo?: Record<string, TareaCeoHecha>;
+  resumen_final?: ResumenFinal | null;
+  terminado_en?: string | null;
 };
 
 type Organizacion = Pick<Edificio, "nombre" | "color">;
 
 /** Un proyecto para la lista del panel. */
-export type ProyectoResumen = Pick<Proyecto, "id" | "nombre" | "estado" | "progreso" | "fecha_limite" | "aviso" | "creado_en"> & {
+export type ProyectoResumen = Pick<Proyecto, "id" | "nombre" | "estado" | "progreso" | "fecha_limite" | "aviso" | "creado_en" | "fase_estado"> & {
   organizacion: Organizacion;
   /** Turno de los que están "en espera" (1 = el siguiente), o null. */
   turno: number | null;
+  /** "Fase 2 de 5" (en marcha), o null. */
+  fase: { numero: number; total: number } | null;
 };
 
-/** Un proyecto con todo su detalle (imágenes con URL firmada). */
+/** Imágenes y colores de la organización: lo que necesitan las entregas para verse (carteles, Instagram). */
+export type MediosEntrega = Pick<EncargoVista, "adjuntos" | "proyecto">;
+
+/** Un proyecto con todo su detalle (imágenes con URL firmada) y, en marcha, sus tareas y entregas. */
 export type ProyectoVista = Omit<Proyecto, "adjuntos"> & {
   adjuntos: ((AdjuntoImagen & { url: string | null }) | (Omit<AdjuntoPdf, "texto"> & { caracteres: number }))[];
   organizacion: Organizacion;
   turno: number | null;
   /** Lleva demasiado tiempo haciendo el plan sin avanzar (se cortó la ejecución): "Reanudar". */
   atascado: boolean;
+  entregas: EntregaProyecto[];
+  medios: MediosEntrega;
 };
 
 const SIN_MIGRACION = "¿Has ejecutado la migración 0015?";
+type FilaOrganizacion = Pick<Edificio, "nombre" | "color" | "color_secundario" | "letrero" | "letrero_secundario">;
 
 function organizacionDe(fila: { edificios: Organizacion | null }): Organizacion {
   return { nombre: fila.edificios?.nombre ?? "Organización", color: fila.edificios?.color ?? "#8a93ad" };
@@ -88,43 +127,100 @@ export async function cargarProyectos(): Promise<ProyectoResumen[]> {
   const [{ data, error }, turno] = await Promise.all([
     supabase()
       .from("proyectos")
-      .select("id, nombre, estado, progreso, fecha_limite, aviso, creado_en, edificios(nombre, color)")
+      // Todas las columnas: así funciona con y sin la migración 0016 (fase actual).
+      .select("*, edificios(nombre, color)")
       .order("creado_en", { ascending: false })
-      .returns<(Omit<ProyectoResumen, "organizacion" | "turno"> & { edificios: Organizacion | null })[]>(),
+      .returns<(Proyecto & { edificios: Organizacion | null })[]>(),
     turnos(),
   ]);
   if (error) throw new Error(`No se pudieron leer los proyectos: ${error.message}. ${SIN_MIGRACION}`);
   const cerrado = (e: EstadoProyecto) => e === "terminado" || e === "cancelado";
   return (data ?? [])
-    .map(({ edificios, ...p }) => ({ ...p, organizacion: organizacionDe({ edificios }), turno: turno.get(p.id) ?? null }))
+    .map((p) => ({
+      id: p.id,
+      nombre: p.nombre,
+      estado: p.estado,
+      progreso: p.progreso,
+      fecha_limite: p.fecha_limite,
+      aviso: p.aviso,
+      creado_en: p.creado_en,
+      fase_estado: p.fase_estado ?? null,
+      organizacion: organizacionDe(p),
+      turno: turno.get(p.id) ?? null,
+      fase: p.estado === "en_marcha" && p.plan ? { numero: (p.fase_actual ?? 0) + 1, total: p.plan.fases.length } : null,
+    }))
     .sort((a, b) => Number(cerrado(a.estado)) - Number(cerrado(b.estado)));
 }
 
 /** Un proyecto con todo su detalle, o null si no existe. */
 export async function cargarProyecto(id: string): Promise<ProyectoVista | null> {
-  const [{ data, error }, turno] = await Promise.all([
+  const [{ data, error }, turno, entregas] = await Promise.all([
     supabase()
       .from("proyectos")
-      .select("*, edificios(nombre, color)")
+      .select("*, edificios(nombre, color, color_secundario, letrero, letrero_secundario)")
       .eq("id", id)
-      .maybeSingle<Proyecto & { edificios: Organizacion | null }>(),
+      .maybeSingle<Proyecto & { edificios: FilaOrganizacion | null }>(),
     turnos(),
+    cargarEntregas(id),
   ]);
   if (error) throw new Error(`No se pudo leer el proyecto: ${error.message}. ${SIN_MIGRACION}`);
   if (!data) return null;
   const { edificios, ...p } = data;
   const urls = await firmarImagenes(p.adjuntos.flatMap((a) => (a.tipo === "imagen" ? [a.ruta] : [])));
+  const adjuntos = p.adjuntos.map((a) =>
+    a.tipo === "imagen"
+      ? { ...a, url: urls.get(a.ruta) ?? null }
+      : { tipo: "pdf" as const, nombre: a.nombre, paginas: a.paginas, caracteres: a.texto.length },
+  );
   return {
     ...p,
-    adjuntos: p.adjuntos.map((a) =>
-      a.tipo === "imagen"
-        ? { ...a, url: urls.get(a.ruta) ?? null }
-        : { tipo: "pdf" as const, nombre: a.nombre, paginas: a.paginas, caracteres: a.texto.length },
-    ),
+    adjuntos,
     organizacion: organizacionDe({ edificios }),
     turno: turno.get(p.id) ?? null,
     atascado: proyectoAtascado(p),
+    entregas,
+    medios: {
+      adjuntos,
+      proyecto: {
+        nombre: edificios?.nombre ?? "Organización",
+        color: edificios?.color ?? "#8a93ad",
+        colorSecundario: edificios?.color_secundario || edificios?.color || "#8a93ad",
+        letrero: edificios?.letrero || edificios?.nombre || "Organización",
+        letreroSecundario: edificios?.letrero_secundario || null,
+      },
+    },
   };
+}
+
+/** Las tareas de agente de un proyecto, con su entrega. Sin la migración 0016, ninguna. */
+async function cargarEntregas(id: string): Promise<EntregaProyecto[]> {
+  const { data, error } = await supabase()
+    .from("tareas")
+    .select("*, agentes(nombre)")
+    .eq("proyecto_id", id)
+    .order("creado_en")
+    .returns<(Tarea & { agentes: { nombre: string } | null })[]>();
+  if (error) return [];
+  const viejo = (t: Tarea) =>
+    (t.estado === "en_curso" || t.estado === "revisando") &&
+    (!t.paso_hasta || Date.parse(t.paso_hasta) < Date.now()) &&
+    Date.now() - Date.parse(t.actualizado_en) > MINUTOS_ATASCADO * 60_000;
+  return (data ?? []).map((t) => ({
+    id: t.id,
+    clave: t.clave ?? "",
+    fase: t.fase ?? 0,
+    titulo: t.titulo ?? t.instrucciones.split("\n")[0] ?? "",
+    agente: t.agentes?.nombre ?? "Agente",
+    estado: t.estado,
+    resultado: t.resultado,
+    resultado_json: t.resultado_json ?? null,
+    texto_editado: t.texto_editado ?? null,
+    nota_agente: t.nota_agente ?? null,
+    nota_director: t.nota_director ?? null,
+    aviso: t.aviso ?? null,
+    vueltas: t.vueltas ?? 0,
+    atascada: viejo(t),
+  }));
 }
 
 /* ───────────── Crear ───────────── */
@@ -254,7 +350,7 @@ export async function pedirCambiosPlan(id: string, comentario: string): Promise<
   );
 }
 
-/** Cancela un proyecto (no se borra). Si tenía hueco, el siguiente en espera avanza. */
+/** Cancela un proyecto (no se borra nada). Lo que estaba a medias se para y, si tenía hueco, el siguiente en espera avanza. */
 export async function cancelarProyecto(id: string): Promise<void> {
   const { data, error } = await supabase()
     .from("proyectos")
@@ -264,6 +360,10 @@ export async function cancelarProyecto(id: string): Promise<void> {
     .select("id");
   if (error) throw new Error(`No se pudo cancelar: ${error.message}`);
   if (!data?.length) throw new Error("Este proyecto ya está terminado o cancelado.");
+  // Sus tareas ya no las coge la cola (el proyecto no está en marcha); las que estaban a medias vuelven a su paso anterior.
+  const db = supabase();
+  await db.from("tareas").update({ estado: "pendiente", paso_hasta: null }).eq("proyecto_id", id).eq("estado", "en_curso");
+  await db.from("tareas").update({ estado: "revision", paso_hasta: null }).eq("proyecto_id", id).eq("estado", "revisando");
   await rellenarHuecos();
 }
 
@@ -280,4 +380,9 @@ export async function reintentarPlan(id: string): Promise<void> {
     throw new Error("Este proyecto ya no necesita reintentarse.");
   }
   await cambiar(id, "borrador", VOLVER_A_PLANIFICAR(), "Este proyecto ya no necesita reintentarse.");
+}
+
+/** El estado de un proyecto (para decidir qué hace "Reintentar"). */
+export async function leerEstadoProyecto(id: string): Promise<EstadoProyecto> {
+  return (await leer(id)).estado;
 }

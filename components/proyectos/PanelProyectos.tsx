@@ -111,7 +111,12 @@ function Grupo({ titulo, proyectos, vacio }: { titulo: string; proyectos: Proyec
                     <span aria-hidden="true" className="size-2 rounded-[2px]" style={{ background: p.organizacion.color }} />
                     {p.organizacion.nombre}
                   </span>
-                  <EtiquetaEstado estado={p.estado} turno={p.turno} aviso={Boolean(p.aviso)} />
+                  <EtiquetaEstado estado={p.estado} turno={p.turno} aviso={Boolean(p.aviso)} faseEstado={p.fase_estado} />
+                  {p.fase && (
+                    <span className="text-xs text-muted">
+                      Fase {p.fase.numero} de {p.fase.total}
+                    </span>
+                  )}
                   {p.fecha_limite && <span className="text-xs text-muted">· hasta el {fechaCorta(p.fecha_limite)}</span>}
                 </span>
                 <span className="font-semibold">{p.nombre}</span>

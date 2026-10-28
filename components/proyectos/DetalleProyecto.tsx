@@ -11,6 +11,7 @@ import {
 import type { ProyectoVista } from "@/lib/proyectos";
 import { ESTADOS_CERRADOS, MAX_CARACTERES_PROYECTO, MAX_PROYECTOS_A_LA_VEZ, type Plan } from "@/lib/proyectos-reglas";
 import { BarraProgreso, EtiquetaEstado, fechaCorta } from "./comun";
+import ProyectoEnMarcha from "./ProyectoEnMarcha";
 
 const CAMPO = "w-full resize-y rounded-lg border border-line bg-ink px-3 py-2 text-sm leading-relaxed text-text outline-none focus:border-accent";
 
@@ -35,6 +36,9 @@ export default function DetalleProyecto({ proyecto: p }: { proyecto: ProyectoVis
   const pregunta = p.estado === "esperando_respuesta" ? p.preguntas.at(-1) : undefined;
   const haciendoPlan = p.estado === "borrador" && !p.aviso && !p.atascado;
   const esperandoGroq = haciendoPlan && p.reintentar_en && Date.parse(p.reintentar_en) > Date.parse(p.actualizado_en) + 1000;
+  // El equipo ya ha trabajado en él: se ven sus fases y entregas (también si lo cancelé a medias).
+  const trabajando = ["en_marcha", "final_revision", "terminado"].includes(p.estado) || (p.estado === "cancelado" && p.entregas.length > 0);
+  const fases = p.plan?.fases.length ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,12 +48,17 @@ export default function DetalleProyecto({ proyecto: p }: { proyecto: ProyectoVis
             <span aria-hidden="true" className="size-2 rounded-[2px]" style={{ background: p.organizacion.color }} />
             {p.organizacion.nombre}
           </span>
-          <EtiquetaEstado estado={p.estado} turno={p.turno} aviso={Boolean(p.aviso)} />
+          <EtiquetaEstado estado={p.estado} turno={p.turno} aviso={Boolean(p.aviso)} faseEstado={p.fase_estado} />
         </div>
         <h2 id="panel-titulo" className="font-display text-2xl font-extrabold">
           {p.nombre}
         </h2>
         <BarraProgreso valor={p.progreso} />
+        {p.estado === "en_marcha" && fases > 0 && (
+          <p className="text-sm text-muted">
+            Fase {(p.fase_actual ?? 0) + 1} de {fases}
+          </p>
+        )}
       </div>
 
       {error && (
@@ -114,7 +123,18 @@ export default function DetalleProyecto({ proyecto: p }: { proyecto: ProyectoVis
         </p>
       )}
 
-      {p.plan && (
+      {/* En marcha (o terminado): el trabajo fase a fase; el plan queda plegado debajo. */}
+      {trabajando && <ProyectoEnMarcha proyecto={p} />}
+      {p.plan && trabajando && (
+        <details className="rounded-xl border border-line p-3">
+          <summary className="cursor-pointer text-sm font-semibold">Ver el plan del Director</summary>
+          <div className="mt-3">
+            <VistaPlan plan={p.plan} />
+          </div>
+        </details>
+      )}
+
+      {p.plan && !trabajando && (
         <section aria-labelledby={`${id}-plan`} className="flex flex-col gap-4">
           <div className="flex items-baseline justify-between gap-2">
             <h3 id={`${id}-plan`} className="font-display text-lg font-extrabold">

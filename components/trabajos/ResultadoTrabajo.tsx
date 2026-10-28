@@ -5,12 +5,15 @@ import { toPng } from "html-to-image";
 import Cartel from "@/components/carteles/Cartel";
 import { PLANTILLAS, TAMANOS, type CartelDiseñador, type MarcaCartel } from "@/lib/carteles";
 import type { EncargoVista } from "@/lib/encargos";
+
+/** Lo que necesita un resultado para verse: las imágenes adjuntas y los colores de la organización (de un encargo o de un proyecto). */
+export type MediosResultado = Pick<EncargoVista, "adjuntos" | "proyecto">;
 import { textoDeResultado, type Prioridad, type Resultado, type ResultadoMejoras, type Riesgo } from "@/lib/trabajos";
 
 type Props = {
   resultado: Resultado;
   /** El encargo de la tarea: sus imágenes (Instagram, Diseñador) y su proyecto (colores del cartel). */
-  encargo: EncargoVista;
+  encargo: MediosResultado;
   /** Texto editado por la CEO (resultados sin campos propios): se muestra en lugar del original. */
   textoEditado?: string | null;
   /** Solo el Diseñador: el botón pasa a ser "Descargar PNG y aprobar" y esto se llama tras descargar. */
@@ -36,7 +39,7 @@ export function BotonCopiar({ texto, etiqueta = "Copiar" }: { texto: string; eti
 }
 
 /** Imágenes adjuntas del encargo, en orden (la "imagen nº N" del agente es la N-ésima de estas). */
-function imagenesDe(encargo: EncargoVista) {
+function imagenesDe(encargo: MediosResultado) {
   return encargo.adjuntos.flatMap((a) => (a.tipo === "imagen" ? [a] : []));
 }
 
@@ -117,7 +120,7 @@ function nombreArchivo(...partes: string[]): string {
 }
 
 /** El cartel ya montado con su plantilla, los colores del proyecto y (si la lleva) la foto adjunta. */
-function CartelListo({ cartel, encargo, alDescargar }: { cartel: CartelDiseñador; encargo: EncargoVista; alDescargar?: () => Promise<void> }) {
+function CartelListo({ cartel, encargo, alDescargar }: { cartel: CartelDiseñador; encargo: MediosResultado; alDescargar?: () => Promise<void> }) {
   const nodo = useRef<HTMLDivElement>(null);
   const [foto, setFoto] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<{ error?: boolean; texto: string } | null>(null);

@@ -4,9 +4,12 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { aprobarTrabajo, editarTrabajo, pedirCambiosTrabajo } from "@/app/actions/trabajos";
 import Cartel from "@/components/carteles/Cartel";
 import { CAMPOS, PLANTILLAS, TAMANOS, leerCartel, type CartelDiseñador, type MarcaCartel, type Plantilla, type Tamano } from "@/lib/carteles";
-import type { EncargoVista, TareaVista } from "@/lib/encargos";
+import type { TareaVista } from "@/lib/encargos";
 import { textoDeResultado, type Resultado } from "@/lib/trabajos";
-import ResultadoTrabajo, { BotonCopiar } from "./ResultadoTrabajo";
+import ResultadoTrabajo, { BotonCopiar, type MediosResultado } from "./ResultadoTrabajo";
+
+/** Lo que necesita el editor de un trabajo (de un encargo o una entrega de proyecto). */
+export type TrabajoEditable = Pick<TareaVista, "resultado_json" | "resultado" | "texto_editado"> & { encargo: MediosResultado };
 
 const CAMPO = "w-full rounded-lg border border-line bg-ink px-3 py-2 text-sm text-text outline-none focus:border-accent";
 const BOTON = "min-h-9 rounded-md border border-line px-3 text-xs font-semibold hover:border-muted disabled:opacity-50";
@@ -14,7 +17,7 @@ const BOTON = "min-h-9 rounded-md border border-line px-3 text-xs font-semibold 
 type Modo = "ver" | "editar" | "cambios";
 
 /** El texto que se copia de un trabajo (mi versión si lo edité entero). */
-function textoParaCopiar(t: TareaVista): string {
+export function textoParaCopiar(t: Pick<TareaVista, "resultado_json" | "resultado" | "texto_editado">): string {
   return t.texto_editado || (t.resultado_json ? textoDeResultado(t.resultado_json) : t.resultado);
 }
 
@@ -146,9 +149,9 @@ function PedirCambios({ pendiente, alCancelar, alEnviar }: { pendiente: boolean;
 
 /* ───────────── Editar ───────────── */
 
-type Edicion = Parameters<typeof editarTrabajo>[1];
+export type Edicion = Parameters<typeof editarTrabajo>[1];
 
-function Editor({ tarea, pendiente, alCancelar, alGuardar }: { tarea: TareaVista; pendiente: boolean; alCancelar: () => void; alGuardar: (e: Edicion) => void }) {
+export function Editor({ tarea, pendiente, alCancelar, alGuardar }: { tarea: TrabajoEditable; pendiente: boolean; alCancelar: () => void; alGuardar: (e: Edicion) => void }) {
   const r = tarea.resultado_json!;
   const id = useId();
   // Campos propios para Instagram, el cartel, la traducción y la redacción; el texto entero para el resto.
@@ -229,7 +232,7 @@ function Editor({ tarea, pendiente, alCancelar, alGuardar }: { tarea: TareaVista
 const ANCHO_PREVIA = 340;
 
 /** Los campos del cartel con su vista previa en vivo. */
-function EditorCartel({ cartel, encargo, onChange }: { cartel: CartelDiseñador; encargo: EncargoVista; onChange: (c: CartelDiseñador) => void }) {
+function EditorCartel({ cartel, encargo, onChange }: { cartel: CartelDiseñador; encargo: MediosResultado; onChange: (c: CartelDiseñador) => void }) {
   const { ancho, alto } = TAMANOS[cartel.tamano];
   const escala = ANCHO_PREVIA / ancho;
   const imagenes = encargo.adjuntos.filter((a) => a.tipo === "imagen");

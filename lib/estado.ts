@@ -30,6 +30,15 @@ export type ResumenPlanes = {
   error: string | null;
   /** Planes que he aprobado y aún no he visto en su ficha (luz verde). */
   aprobadosSinVer?: number;
+  // Proyectos en marcha (migración 0016):
+  /** Qué está haciendo ("Resumiendo una fase…"), si hace algo. */
+  textoHaciendo?: string;
+  /** "Fase para revisar", "Final para revisar"… o "N proyectos para revisar". */
+  textoRevisar?: string;
+  /** Proyecto con tareas mías pendientes en la fase actual, o null. */
+  tareasCeo?: string | null;
+  /** Proyectos terminados que aún no he visto en su ficha (luz verde). */
+  terminadosSinVer?: number;
 };
 
 /** Tareas de un agente según su paso. */
@@ -79,13 +88,14 @@ export function estadoAgente(
   if (planes?.error) return { ...base, luz: "rojo", texto: planes.error };
   const esperando = (reparto?.esperando ?? 0) + (planes?.preguntas ?? 0);
   if (esperando) return { ...base, luz: "rojo", texto: esperando === 1 ? "Te ha hecho una pregunta" : `${esperando} preguntas para ti` };
-  if (planes?.paraRevisar) return { ...base, luz: "rojo", texto: planes.paraRevisar === 1 ? "Plan para revisar" : `${planes.paraRevisar} planes para revisar` };
+  if (planes?.paraRevisar) return { ...base, luz: "rojo", texto: planes.textoRevisar ?? "Plan para revisar" };
+  if (planes?.tareasCeo) return { ...base, luz: "rojo", texto: `Tienes tareas del proyecto ${planes.tareasCeo}` };
   const tareas = agente.tareas;
   // Su trabajo está revisado y listo: te necesita.
   if (tareas?.listas) return { ...base, luz: "rojo", texto: "Te necesita" };
   if (reparto?.enCurso) return { ...base, trabajando: true, luz: "amarillo", texto: "Repartiendo…" };
   if (reparto?.revisando) return { ...base, trabajando: true, luz: "amarillo", texto: "Revisando…" };
-  if (planes?.haciendo) return { ...base, trabajando: true, luz: "amarillo", texto: "Haciendo un plan…" };
+  if (planes?.haciendo) return { ...base, trabajando: true, luz: "amarillo", texto: planes.textoHaciendo ?? "Haciendo un plan…" };
   if (tareas?.trabajando) return { ...base, trabajando: true, luz: "amarillo", texto: "Trabajando…" };
   if (estados.lista > 0) return { ...base, luz: "rojo", texto: "Te necesita" };
   if (estados.error > 0) return { ...base, luz: "rojo", texto: "Error" };
@@ -93,7 +103,9 @@ export function estadoAgente(
   if (estados.publicando > 0) return { ...base, luz: "amarillo", texto: "Publicando…" };
   if (tareas?.enRevision) return { ...base, luz: "amarillo", texto: "En revisión" };
   if (tareas?.pendientes) return { ...base, luz: "amarillo", texto: "Tarea pendiente" };
-  if (sinVer > 0) return { ...base, luz: "verde", texto: planes?.aprobadosSinVer ? "Plan aprobado" : "¡Terminado!" };
+  if (sinVer > 0) {
+    return { ...base, luz: "verde", texto: planes?.terminadosSinVer ? "Proyecto terminado" : planes?.aprobadosSinVer ? "Plan aprobado" : "¡Terminado!" };
+  }
   if (enCola > 0) return { ...base, luz: "apagada", texto: `${enCola} en cola` };
   return { ...base, luz: "apagada", texto: "Libre" };
 }

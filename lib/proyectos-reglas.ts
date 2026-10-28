@@ -2,7 +2,7 @@
 
 /**
  * borrador (el Director hace el plan) → plan_revision (plan para revisar) → aprobado | en_espera (ya hay 3)
- *   → en_marcha → terminado. En cualquier momento: cancelado.
+ *   → en_marcha (fase a fase) → final_revision (final para revisar) → terminado. En cualquier momento: cancelado.
  * Si al Director le falta información: esperando_respuesta → (respondo) → borrador.
  */
 export type EstadoProyecto =
@@ -12,6 +12,7 @@ export type EstadoProyecto =
   | "aprobado"
   | "en_espera"
   | "en_marcha"
+  | "final_revision"
   | "terminado"
   | "cancelado";
 
@@ -22,11 +23,12 @@ export const TEXTO_ESTADO_PROYECTO: Record<EstadoProyecto, string> = {
   aprobado: "Plan aprobado",
   en_espera: "En espera",
   en_marcha: "En marcha",
+  final_revision: "Final para revisar",
   terminado: "Terminado",
   cancelado: "Cancelado",
 };
 
-/** Proyectos a la vez entre "plan aprobado" y "en marcha" (los demás esperan turno). */
+/** Proyectos a la vez entre "plan aprobado", "en marcha" y "final para revisar" (los demás esperan turno). */
 export const MAX_PROYECTOS_A_LA_VEZ = 3;
 
 /** Estados que ya no cambian. */
@@ -65,3 +67,42 @@ export type Plan = {
 
 /** Una versión anterior del plan y los cambios que pedí sobre ella. */
 export type VersionPlan = { plan: Plan; cambios: string; guardado_en: string };
+
+/**
+ * Cómo va la fase actual de un proyecto en marcha (migración 0016):
+ * trabajando → resumiendo (el Director escribe el resumen) → para_revisar
+ *   → (pido cambios) cambios (el Director decide qué rehacer) → trabajando…
+ *   → (apruebo la última) final (el Director escribe el resumen final) → proyecto "final_revision".
+ */
+export type EstadoFase = "trabajando" | "resumiendo" | "para_revisar" | "cambios" | "final";
+
+/** Lo que se guarda de cada fase: el resumen del Director, los cambios que pedí y cuándo la aprobé. */
+export type InfoFase = { resumen?: string; cambios?: string[]; aprobada_en?: string };
+
+/** Una tarea para la CEO marcada como hecha, con mi nota. */
+export type TareaCeoHecha = { hecha_en: string; nota: string };
+
+/** El resumen final del Director. */
+export type ResumenFinal = { hecho: string; entregas: string[]; pendiente_ceo: string[] };
+
+/** Estados en los que una tarea de un proyecto ya está terminada (el Director la ha dado por buena). */
+export const TAREA_TERMINADA = ["revisada", "lista", "aprobada"] as const;
+
+/** Una tarea de agente de un proyecto en marcha, para verla en el panel (con su entrega si la tiene). */
+export type EntregaProyecto = {
+  id: string;
+  clave: string;
+  fase: number;
+  titulo: string;
+  agente: string;
+  estado: "pendiente" | "en_curso" | "revision" | "revisando" | "revisada" | "lista" | "aprobada" | "error";
+  resultado: string;
+  resultado_json: import("./trabajos").Resultado | null;
+  texto_editado: string | null;
+  nota_agente: string | null;
+  nota_director: string | null;
+  aviso: string | null;
+  vueltas: number;
+  /** Se cortó la ejecución que la tenía (lleva demasiado sin avanzar): "Reanudar". */
+  atascada: boolean;
+};
