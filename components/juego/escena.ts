@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import type { Aspecto } from "@/components/oficina/Personaje";
 import { COLOR_LUZ, type Luz } from "@/lib/estado";
+import { PLANTA_DIRECCION } from "@/lib/plantas";
 import type { Despacho } from "@/lib/tipos";
 import { pintarAlfombra } from "./dibujos/alfombra";
 import { dibujarAscensor } from "./dibujos/ascensor";
@@ -61,7 +62,7 @@ export type Juego = {
 /** Mi personaje (la CEO). */
 const ASPECTO_CEO: Aspecto = { camiseta: "#9b2c3c", sombra: "#76202d", pelo: "#5a3a26", piel: "#f1c7a1", peinado: "largo" };
 /** Planta en la que aparezco al abrir la app. */
-const PLANTA_INICIAL = 4;
+const PLANTA_INICIAL = PLANTA_DIRECCION;
 
 const VELOCIDAD = 150;
 const VELOCIDAD_AGENTE = 115;

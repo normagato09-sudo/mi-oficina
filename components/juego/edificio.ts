@@ -5,7 +5,7 @@ import type { TipoSuelo } from "./dibujos/suelo";
  * El edificio, planta a planta, en casillas de 32 px. Solo datos (sin Phaser).
  * Todas las plantas miden lo mismo y tienen el ascensor y la escalera en el mismo sitio (arriba a la izquierda):
  *
- *   ┌─ascensor─escalera─┬──────── ventanales ────────┬─ despacho del jefe ─┐
+ *   ┌─ascensor─escalera─┬──────── ventanales ────────┬─── sala de estar ───┐
  *   │  núcleo           │   mesas de trabajo          │   (cristal)          │
  *   │                   │                             ├─ sala de reuniones ──┤
  *   ├─ zona común ──────┤                             │   (cristal)          │
@@ -63,7 +63,7 @@ export type Planta = {
   muebles: Mueble[];
   /** Mesas de trabajo en orden: el primer agente de la planta va a la primera, etc. */
   puestos: Puesto[];
-  /** Despacho del jefe de la planta (en Dirección, el del Director). */
+  /** Despacho del jefe de la planta (solo en Dirección: el del Director). */
   jefe?: Puesto;
   reunion: Asiento[];
   /** Nombres pintados en el suelo. */
@@ -78,9 +78,10 @@ export type Planta = {
 const COLOR_MOQUETA: Record<number, string> = {
   0: "#d9d1c3",
   1: "#7f8f7c",
-  2: "#6f8199",
-  3: "#9c8088",
-  4: "#7d7066",
+  2: "#8a7f9e",
+  3: "#6f8199",
+  4: "#9c8088",
+  5: "#7d7066",
 };
 
 function nucleo(): Zona {
@@ -114,7 +115,7 @@ function asientosMesa(x: number, y: number, casillas: number): Asiento[] {
   return [...arriba.sort((a, b) => centro(a) - centro(b)), ...abajo.sort((a, b) => centro(a) - centro(b))];
 }
 
-/** Planta de departamento (1, 2 y 3): mesas en filas, despacho del jefe y sala de reuniones acristalados. */
+/** Planta de departamento (1 a 4): mesas en filas, sala de estar y sala de reuniones acristaladas. */
 function plantaDepartamento(n: number, nombre: string): Planta {
   const moqueta = COLOR_MOQUETA[n]!;
   return {
@@ -142,10 +143,14 @@ function plantaDepartamento(n: number, nombre: string): Planta {
       { tipo: "planta", x: 27, y: 2, alta: true },
       { tipo: "planta", x: 10, y: 6 },
       { tipo: "planta", x: 27, y: 24 },
-      // Despacho del jefe.
-      { tipo: "estanteria", x: 36, y: 2, casillas: 2 },
-      { tipo: "planta", x: 30, y: 8 },
-      { tipo: "planta", x: 38, y: 8, alta: true },
+      // Sala de estar (donde iba el despacho del jefe): sofá, mesita, estanterías y plantas.
+      { tipo: "estanteria", x: 30, y: 2, casillas: 2 },
+      { tipo: "estanteria", x: 36, y: 2, casillas: 3 },
+      { tipo: "sofa", x: 31, y: 5, casillas: 3, color: "#c98d5b", mira: "abajo" },
+      { tipo: "mesita", x: 32, y: 7 },
+      { tipo: "sofa", x: 35, y: 5, casillas: 3, color: "#5b6a8f", mira: "abajo" },
+      { tipo: "planta", x: 30, y: 8, alta: true },
+      { tipo: "planta", x: 38, y: 8 },
       // Sala de reuniones.
       { tipo: "mesaReunion", x: 32, y: 17, casillas: 5 },
       { tipo: "planta", x: 38, y: 13 },
@@ -153,17 +158,16 @@ function plantaDepartamento(n: number, nombre: string): Planta {
       { tipo: "planta", x: 30, y: 24 },
     ],
     puestos: mesasEnFilas([7, 12, 17], [12, 16, 20, 24]),
-    jefe: { x: 33, y: 4, madera: true },
     reunion: asientosMesa(32, 17, 5),
     rotulos: [
       { texto: `PLANTA ${n} · ${nombre.toUpperCase()}`, x: 5, y: 7.2 },
-      { texto: "JEFATURA", x: 34, y: 8.5 },
+      { texto: "SALA DE ESTAR", x: 34, y: 8.5 },
       { texto: "SALA DE REUNIONES", x: 34, y: 24.4 },
     ],
   };
 }
 
-/* ───────────── Las cinco plantas ───────────── */
+/* ───────────── Las seis plantas ───────────── */
 
 const recepcion: Planta = {
   n: 0,
@@ -222,9 +226,9 @@ const recepcion: Planta = {
 };
 
 const direccion: Planta = {
-  n: 4,
+  n: 5,
   zonas: [
-    { x1: 1, y1: MURO_ARRIBA, x2: ANCHO - 2, y2: ALTO - 2, suelo: "moqueta", color: COLOR_MOQUETA[4]! },
+    { x1: 1, y1: MURO_ARRIBA, x2: ANCHO - 2, y2: ALTO - 2, suelo: "moqueta", color: COLOR_MOQUETA[5]! },
     nucleo(),
     { x1: 22, y1: MURO_ARRIBA, x2: 38, y2: 13, suelo: "madera", color: P.madera },
     { x1: 12, y1: MURO_ARRIBA, x2: 20, y2: 9, suelo: "madera", color: P.maderaClara },
@@ -279,7 +283,7 @@ const direccion: Planta = {
   jefe: { x: 15, y: 4, madera: true },
   reunion: asientosMesa(14, 19, 5),
   rotulos: [
-    { texto: "PLANTA 4 · DIRECCIÓN", x: 5, y: 7.2 },
+    { texto: "PLANTA 5 · DIRECCIÓN", x: 5, y: 7.2 },
     { texto: "MI DESPACHO", x: 30, y: 13.4 },
     { texto: "DIRECCIÓN", x: 16, y: 9.4 },
     { texto: "SALA DE REUNIONES", x: 16, y: 24.4 },
@@ -289,9 +293,10 @@ const direccion: Planta = {
 
 export const EDIFICIO: Planta[] = [
   recepcion,
-  plantaDepartamento(1, "Administración"),
-  plantaDepartamento(2, "Tecnología"),
-  plantaDepartamento(3, "Comunicación"),
+  plantaDepartamento(1, "Gestión y estrategia"),
+  plantaDepartamento(2, "Personas"),
+  plantaDepartamento(3, "Tecnología"),
+  plantaDepartamento(4, "Comunicación y contenido"),
   direccion,
 ];
 
